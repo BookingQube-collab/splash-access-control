@@ -1,8 +1,9 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { QRCodeSVG } from "qrcode.react";
 import { motion } from "framer-motion";
-import { Sparkles, Printer, ExternalLink, X } from "lucide-react";
+import { Sparkles, Printer, ExternalLink, X, Share2 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 
 export function QrPassModal({
   open,
@@ -20,6 +21,26 @@ export function QrPassModal({
   guests?: number;
 }) {
   if (!token) return null;
+  const passUrl = typeof window !== "undefined" ? `${window.location.origin}/pass/${token}` : `/pass/${token}`;
+
+  const handleShare = async () => {
+    const shareData = {
+      title: "SummerSplash digital pass",
+      text: customerName ? `${customerName}'s pass${slotName ? " · " + slotName : ""}` : "Your SummerSplash pass",
+      url: passUrl,
+    };
+    try {
+      if (typeof navigator !== "undefined" && (navigator as any).share) {
+        await (navigator as any).share(shareData);
+        return;
+      }
+      await navigator.clipboard.writeText(passUrl);
+      toast.success("Pass link copied to clipboard");
+    } catch {
+      // user dismissed share — silent
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm border-0 bg-transparent p-0 shadow-none">
@@ -48,26 +69,42 @@ export function QrPassModal({
             </div>
           )}
 
-          <div className="relative mt-5 grid place-items-center rounded-2xl bg-white p-5">
+          <Link
+            to="/pass/$token"
+            params={{ token }}
+            target="_blank"
+            className="relative mt-5 grid place-items-center rounded-2xl bg-white p-5 transition hover:scale-[1.01]"
+          >
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-aqua/10 via-transparent to-sunset/10" />
             <QRCodeSVG value={token} size={220} level="H" includeMargin={false} />
-          </div>
+          </Link>
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
+          {/* Primary: open the full digital pass page (reprint + share source) */}
+          <Link
+            to="/pass/$token"
+            params={{ token }}
+            target="_blank"
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-sunset py-3 text-sm font-semibold text-foreground shadow-glow-sunset transition hover:brightness-110"
+          >
+            <ExternalLink className="h-4 w-4" /> Open full digital pass
+          </Link>
+
+          {/* Reprint + Share */}
+          <div className="mt-2 grid grid-cols-2 gap-2">
             <button
-              onClick={() => window.print()}
+              onClick={() => window.open(passUrl, "_blank", "noopener,noreferrer")}
               className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-foreground/10 px-3 py-2.5 text-xs font-semibold hover:bg-foreground/15"
+              title="Open the full pass and print"
             >
-              <Printer className="h-3.5 w-3.5" /> Print
+              <Printer className="h-3.5 w-3.5" /> Reprint
             </button>
-            <Link
-              to="/pass/$token"
-              params={{ token }}
-              target="_blank"
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-sunset px-3 py-2.5 text-xs font-semibold text-foreground shadow-glow-sunset"
+            <button
+              onClick={handleShare}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-aqua/15 px-3 py-2.5 text-xs font-semibold text-aqua hover:bg-aqua/25"
+              title="Share pass link"
             >
-              <ExternalLink className="h-3.5 w-3.5" /> Open full pass
-            </Link>
+              <Share2 className="h-3.5 w-3.5" /> Share
+            </button>
           </div>
 
           <p className="mt-3 text-center text-[10px] uppercase tracking-wider text-muted-foreground">
