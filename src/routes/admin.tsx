@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import {
   adminListEvents, adminUpsertEvent, adminDeleteEvent,
-  adminListSlots, adminUpsertSlot, adminDeleteSlot, adminGenerateSlots,
+  adminListSlots, adminUpsertSlot, adminDeleteSlot,
   adminListRegistrations,
   adminGetSettings, adminSaveSettings,
   adminListUsers, adminCreateUser, adminSetRole, adminDeleteUser,
@@ -198,36 +198,43 @@ function EventsTab() {
   );
 }
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 
 function SlotsTab() {
   const listE = useServerFn(adminListEvents); const list = useServerFn(adminListSlots);
   const upsert = useServerFn(adminUpsertSlot); const del = useServerFn(adminDeleteSlot);
-  const generate = useServerFn(adminGenerateSlots);
   const qc = useQueryClient();
   const { data: events } = useQuery({ queryKey: ["a-events"], queryFn: () => listE() });
   const { data } = useQuery({ queryKey: ["a-slots"], queryFn: () => list() });
 
   const [eventId, setEventId] = useState("");
   const [name, setName] = useState("");
+  const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [startTime, setStartTime] = useState("10:00");
   const [endTime, setEndTime] = useState("13:00");
   const [cap, setCap] = useState(50);
-  const [recurrence, setRecurrence] = useState<"once" | "daily" | "weekly" | "monthly">("once");
-  const [weekday, setWeekday] = useState(new Date().getDay());
 
   const selectedEvent = (events?.events ?? []).find((e: any) => e.id === eventId);
 
-  const handleGenerate = async () => {
+  // Sync slot date defaults when an event is picked
+  useEffect(() => {
+    if (selectedEvent) {
+      setStartDate(format(new Date(selectedEvent.start_date ?? selectedEvent.event_date), "yyyy-MM-dd"));
+      setEndDate(format(new Date(selectedEvent.end_date ?? selectedEvent.event_date), "yyyy-MM-dd"));
+    }
+  }, [eventId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCreate = async () => {
     if (!eventId || !name) return toast.error("Pick an event and slot name");
-    if (endTime <= startTime) return toast.error("End time must be after start");
+    if (endDate < startDate) return toast.error("End date must be on or after start date");
+    if (endTime <= startTime) return toast.error("End time must be after start time");
     try {
-      const res = await generate({ data: {
-        event_id: eventId, name, start_time: startTime, end_time: endTime, capacity: cap,
-        recurrence, ...(recurrence === "weekly" ? { weekday } : {}),
-      } });
+      const starts_at = new Date(`${startDate}T${startTime}:00`).toISOString();
+      const ends_at = new Date(`${endDate}T${endTime}:00`).toISOString();
+      await upsert({ data: { event_id: eventId, name, starts_at, ends_at, capacity: cap } });
       qc.invalidateQueries({ queryKey: ["a-slots"] });
-      toast.success(`Generated ${res.count} slot${res.count > 1 ? "s" : ""}`);
+      toast.success("Slot created");
       setName("");
     } catch (e: any) { toast.error(e.message); }
   };
@@ -251,82 +258,66 @@ function SlotsTab() {
           </div>
           <div>
             <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Slot name</Label>
-            <Input placeholder="e.g. Morning Splash" value={name} onChange={(e) => setName(e.target.value)} className="h-11 border-0 bg-foreground/5" />
+            <Input placeholder="e.g. Park Guest" value={name} onChange={(e) => setName(e.target.value)} className="h-11 border-0 bg-foreground/5" />
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2">
           <div>
-            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Start time</Label>
+            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Start date</Label>
+            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-11 border-0 bg-foreground/5" />
+          </div>
+          <div>
+            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">End date</Label>
+            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-11 border-0 bg-foreground/5" />
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <div>
+            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Slot start time</Label>
             <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="h-11 border-0 bg-foreground/5" />
           </div>
           <div>
-            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">End time</Label>
+            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Slot end time</Label>
             <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="h-11 border-0 bg-foreground/5" />
           </div>
           <div>
             <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Capacity</Label>
             <Input type="number" min={1} value={cap} onChange={(e) => setCap(Number(e.target.value))} className="h-11 border-0 bg-foreground/5" />
           </div>
-          <div>
-            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Recurrence</Label>
-            <SearchableSelect
-              value={recurrence}
-              onChange={(v) => setRecurrence(v as any)}
-              searchable={false}
-              options={[
-                { value: "once", label: "Once (start date only)" },
-                { value: "daily", label: "Daily" },
-                { value: "weekly", label: "Weekly" },
-                { value: "monthly", label: "Monthly" },
-              ]}
-            />
-          </div>
         </div>
-
-        {recurrence === "weekly" && (
-          <div>
-            <Label className="mb-1.5 block text-[10px] uppercase tracking-wider text-muted-foreground">On weekday</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {WEEKDAYS.map((d, i) => (
-                <button key={d} type="button" onClick={() => setWeekday(i)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${weekday === i ? "bg-aqua text-primary-foreground shadow-glow-aqua" : "bg-foreground/5 text-muted-foreground hover:bg-foreground/10"}`}>
-                  {d}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-foreground/5 pt-4">
           <p className="text-xs text-muted-foreground">
-            {selectedEvent ? (
-              <>Will generate within <b className="text-foreground">{format(new Date(selectedEvent.start_date ?? selectedEvent.event_date), "MMM d")}</b> – <b className="text-foreground">{format(new Date(selectedEvent.end_date ?? selectedEvent.event_date), "MMM d")}</b></>
-            ) : "Select an event to preview the date range."}
+            One slot · <b className="text-foreground">{format(new Date(`${startDate}T00:00:00`), "MMM d")}</b> – <b className="text-foreground">{format(new Date(`${endDate}T00:00:00`), "MMM d")}</b> · {startTime}–{endTime} · cap {cap}. Registration auto-closes when full.
           </p>
-          <button onClick={handleGenerate} className="inline-flex items-center gap-1.5 rounded-xl bg-sunset px-5 h-11 text-sm font-semibold text-foreground shadow-glow-sunset">
-            <Plus className="h-4 w-4" /> Generate slots
+          <button onClick={handleCreate} className="inline-flex items-center gap-1.5 rounded-xl bg-sunset px-5 h-11 text-sm font-semibold text-foreground shadow-glow-sunset">
+            <Plus className="h-4 w-4" /> Create slot
           </button>
         </div>
       </div>
 
       <div className="space-y-2">
-        {(data?.slots ?? []).map((s: any) => (
-          <div key={s.id} className="flex items-center justify-between rounded-2xl glass p-4">
-            <div>
-              <div className="font-semibold">{s.name} <span className="text-muted-foreground font-normal">— {s.events?.name}</span></div>
-              <div className="text-xs text-muted-foreground">{format(new Date(s.starts_at), "PPp")} → {format(new Date(s.ends_at), "p")} · cap {s.capacity}</div>
+        {(data?.slots ?? []).map((s: any) => {
+          const sa = new Date(s.starts_at), ea = new Date(s.ends_at);
+          return (
+            <div key={s.id} className="flex items-center justify-between rounded-2xl glass p-4">
+              <div>
+                <div className="font-semibold">{s.name} <span className="text-muted-foreground font-normal">— {s.events?.name}</span></div>
+                <div className="text-xs text-muted-foreground">
+                  {format(sa, "MMM d, yyyy")} → {format(ea, "MMM d, yyyy")} · {format(sa, "p")} – {format(ea, "p")} · cap {s.capacity}
+                </div>
+              </div>
+              <button onClick={async () => { if (confirm("Delete?")) { await del({ data: { id: s.id } }); qc.invalidateQueries({ queryKey: ["a-slots"] }); } }}
+                className="rounded-lg bg-destructive/15 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/25">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </div>
-            <button onClick={async () => { if (confirm("Delete?")) { await del({ data: { id: s.id } }); qc.invalidateQueries({ queryKey: ["a-slots"] }); } }}
-              className="rounded-lg bg-destructive/15 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/25">
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
+          );
+        })}
         {(data?.slots ?? []).length === 0 && <p className="text-sm text-muted-foreground">No slots yet.</p>}
       </div>
-      {/* Suppress unused warning */}
-      <span className="hidden">{typeof upsert}</span>
     </Panel>
   );
 }
