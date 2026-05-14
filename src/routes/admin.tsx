@@ -389,8 +389,21 @@ function DashTab() {
     }), { cap: 0, inside: 0, active: 0, invalid: 0 });
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Event</label>
+        <select
+          value={eventId}
+          onChange={(e) => setEventId(e.target.value)}
+          className="rounded-xl border border-foreground/10 bg-background/40 px-3 py-2 text-sm outline-none focus:border-primary/40"
+        >
+          <option value="">Active (today)</option>
+          {events.map((e: any) => (
+            <option key={e.id} value={e.id}>{e.name} · {e.days}d ({e.start_date} → {e.end_date})</option>
+          ))}
+        </select>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Capacity" value={totals.cap} hue="bg-primary/15 text-primary" />
+        <Stat label="Capacity (total)" value={totals.cap} hue="bg-primary/15 text-primary" />
         <Stat label="Inside now" value={totals.inside} hue="bg-success/15 text-success" pulse />
         <Stat label="Active passes" value={totals.active} hue="bg-aqua/15 text-aqua" />
         <Stat label="Invalid scans" value={totals.invalid} hue="bg-destructive/15 text-destructive" />
