@@ -168,227 +168,215 @@ function POS() {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto max-w-5xl space-y-5 px-5 pt-5">
-        {/* === Slot picker — horizontal touch row === */}
-        <Section icon={<Ticket className="h-4 w-4" />} title="Choose slot" trailing={
-          slot && <SlotMeterBadge slot={slot} guests={guests} />
-        }>
-          {(data?.slots ?? []).length === 0 ? (
-            <Empty>No slots configured.</Empty>
-          ) : (data?.slots ?? []).every((s) => s.remaining <= 0) ? (
-            <FullBanner>All slots are full — registrations are paused.</FullBanner>
-          ) : (
-            <div className="-mx-1 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-              {(data?.slots ?? []).map((s) => {
-                const full = s.remaining <= 0;
-                const selected = slotId === s.id;
-                const pct = Math.min(100, Math.round(((s.capacity - s.remaining) / Math.max(1, s.capacity)) * 100));
-                return (
-                  <motion.button
-                    key={s.id} type="button" whileTap={{ scale: 0.97 }}
-                    onClick={() => !full && setSlotId(s.id)} disabled={full}
-                    className={`relative overflow-hidden rounded-2xl p-4 text-left transition ${
-                      selected ? "glass-strong ring-2 ring-primary shadow-glow-aqua"
-                               : "glass hover:ring-1 hover:ring-aqua/40"
-                    } ${full ? "cursor-not-allowed opacity-50" : ""}`}
-                  >
-                    {selected && (
-                      <span className="absolute right-2.5 top-2.5 grid h-6 w-6 place-items-center rounded-full bg-primary text-primary-foreground">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      </span>
-                    )}
-                    <div className="font-display text-base font-bold leading-tight">{s.name}</div>
-                    <div className="mt-1.5 flex items-baseline gap-1 text-xs">
-                      {full ? (
-                        <span className="rounded-md bg-coral/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-coral">Sold out</span>
-                      ) : (
-                        <>
-                          <span className="font-display text-xl font-extrabold tabular-nums text-foreground">{s.remaining}</span>
-                          <span className="text-muted-foreground">/ {s.capacity} left</span>
-                        </>
-                      )}
+      <main className="relative z-10 mx-auto w-full max-w-[1400px] flex-1 px-3 py-3 sm:px-4">
+        <div className="grid h-full gap-3 lg:grid-cols-12">
+          {/* === LEFT column: slots + customer === */}
+          <div className="space-y-3 lg:col-span-7">
+            <Section icon={<Ticket className="h-4 w-4" />} title="Choose slot" trailing={
+              slot && <SlotMeterBadge slot={slot} guests={guests} />
+            }>
+              {(data?.slots ?? []).length === 0 ? (
+                <Empty>No slots configured.</Empty>
+              ) : (data?.slots ?? []).every((s) => s.remaining <= 0) ? (
+                <FullBanner>All slots are full — registrations are paused.</FullBanner>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                  {(data?.slots ?? []).map((s) => {
+                    const full = s.remaining <= 0;
+                    const selected = slotId === s.id;
+                    const pct = Math.min(100, Math.round(((s.capacity - s.remaining) / Math.max(1, s.capacity)) * 100));
+                    return (
+                      <motion.button
+                        key={s.id} type="button" whileTap={{ scale: 0.97 }}
+                        onClick={() => !full && setSlotId(s.id)} disabled={full}
+                        className={`relative overflow-hidden rounded-xl p-2.5 text-left transition ${
+                          selected ? "glass-strong ring-2 ring-primary shadow-glow-aqua"
+                                   : "glass hover:ring-1 hover:ring-aqua/40"
+                        } ${full ? "cursor-not-allowed opacity-50" : ""}`}
+                      >
+                        {selected && (
+                          <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-primary-foreground">
+                            <CheckCircle2 className="h-3 w-3" />
+                          </span>
+                        )}
+                        <div className="font-display text-sm font-bold leading-tight">{s.name}</div>
+                        <div className="mt-1 flex items-baseline gap-1 text-[11px]">
+                          {full ? (
+                            <span className="rounded-md bg-coral/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-coral">Full</span>
+                          ) : (
+                            <>
+                              <span className="font-display text-base font-extrabold tabular-nums text-foreground">{s.remaining}</span>
+                              <span className="text-muted-foreground">/ {s.capacity}</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-foreground/10">
+                          <motion.div
+                            initial={false} animate={{ width: `${pct}%` }} transition={{ duration: 0.4 }}
+                            className={`h-full rounded-full bg-gradient-to-r ${meterTone(pct, full)}`}
+                          />
+                        </div>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              )}
+            </Section>
+
+            <Section icon={<User className="h-4 w-4" />} title="Customer">
+              <div className="space-y-2.5">
+                <div className="relative">
+                  <Field icon={<Phone className="h-4 w-4" />} label="Mobile (auto-search · scan barcode)">
+                    <Input
+                      inputMode="tel" autoComplete="tel" value={mobile}
+                      onChange={(e) => setMobile(e.target.value)}
+                      placeholder="Type or scan barcode/QR"
+                      className="h-11 border-0 bg-foreground/5 pr-24 text-base tracking-wide"
+                    />
+                    <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
+                      {lookupBusy ? <Zap className="h-4 w-4 animate-pulse text-aqua" /> :
+                        mobile.trim().length >= 3 ? <Search className="h-4 w-4 text-aqua" /> : null}
+                      <button
+                        type="button" onClick={() => setScanOpen(true)}
+                        title="Scan barcode/QR"
+                        className="inline-flex items-center gap-1 rounded-lg bg-aqua/15 px-2 py-1.5 text-[11px] font-bold text-aqua ring-1 ring-aqua/30 transition hover:bg-aqua/25"
+                      >
+                        <ScanLine className="h-3.5 w-3.5" /> Scan
+                      </button>
                     </div>
-                    <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-foreground/10">
+                  </Field>
+
+                  <AnimatePresence>
+                    {lookupOpen && lookupResults.length > 0 && (
                       <motion.div
-                        initial={false} animate={{ width: `${pct}%` }} transition={{ duration: 0.4 }}
-                        className={`h-full rounded-full bg-gradient-to-r ${meterTone(pct, full)}`}
+                        initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                        className="absolute left-0 right-0 z-20 mt-1.5 max-h-60 overflow-y-auto rounded-2xl border border-foreground/10 bg-background/95 p-1.5 shadow-2xl backdrop-blur-xl"
+                      >
+                        <div className="flex items-center justify-between px-3 py-1.5">
+                          <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-aqua">
+                            <History className="h-3 w-3" /> {lookupResults.length} match{lookupResults.length === 1 ? "" : "es"}
+                          </span>
+                          <button onClick={() => setLookupOpen(false)} className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        {lookupResults.map((r) => (
+                          <button key={r.id} type="button" onClick={() => applyCustomer(r)}
+                            className="group flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition hover:bg-foreground/5">
+                            <div className="grid h-9 w-9 place-items-center rounded-full bg-aqua/15 font-display text-sm font-bold text-aqua">
+                              {r.customer_name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-semibold">{r.customer_name}</div>
+                              <div className="truncate text-[11px] text-muted-foreground">
+                                {r.mobile} · {r.guest_count}g · {r.slots?.name ?? "—"}
+                              </div>
+                            </div>
+                            <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-aqua" />
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  <Field icon={<User className="h-4 w-4" />} label="Full name">
+                    <Input required value={name} onChange={(e) => setName(e.target.value)}
+                      className="h-11 border-0 bg-foreground/5 text-base" />
+                  </Field>
+                  <Field icon={<Mail className="h-4 w-4" />} label="Email (optional)">
+                    <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                      className="h-11 border-0 bg-foreground/5 text-sm" />
+                  </Field>
+                </div>
+              </div>
+            </Section>
+          </div>
+
+          {/* === RIGHT column: guests, capacity, confirm, reprint === */}
+          <div className="flex flex-col gap-3 lg:col-span-5">
+            <Section icon={<Users className="h-4 w-4" />} title="Guests"
+              trailing={slot && <span className="text-[11px] text-muted-foreground">max <b className="text-aqua">{Math.min(20, slot.remaining)}</b></span>}
+            >
+              <GuestStepper guests={guests} setGuests={setGuests} maxAllowed={slot ? Math.min(20, Math.max(1, slot.remaining)) : 20} />
+
+              {slot && (() => {
+                const usedAfter = (slot.capacity - slot.remaining) + guests;
+                const pct = Math.min(100, Math.round((usedAfter / Math.max(1, slot.capacity)) * 100));
+                const over = guests > slot.remaining;
+                const full = slot.remaining <= 0;
+                return (
+                  <div className="mt-3 rounded-xl border border-foreground/10 bg-foreground/5 p-3">
+                    <div className="mb-1.5 flex items-baseline justify-between text-xs">
+                      <span className="font-semibold text-muted-foreground">After this booking</span>
+                      <span className={`font-display text-base font-bold tabular-nums ${over || full ? "text-coral" : "text-foreground"}`}>
+                        {Math.min(slot.capacity, usedAfter)} / {slot.capacity}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-foreground/10">
+                      <motion.div
+                        initial={false} animate={{ width: `${pct}%` }} transition={{ duration: 0.35 }}
+                        className={`h-full rounded-full bg-gradient-to-r ${meterTone(pct, full || over)}`}
                       />
                     </div>
-                  </motion.button>
+                    <AnimatePresence>
+                      {(full || over) && (
+                        <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                          className="mt-2 flex items-center gap-2 rounded-lg border border-coral/30 bg-coral/10 px-2.5 py-1.5 text-[11px] font-semibold text-coral">
+                          <X className="h-3 w-3" />
+                          {full ? "Slot is full — pick another." :
+                            `Only ${slot.remaining} ${slot.remaining === 1 ? "spot" : "spots"} left.`}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 );
-              })}
-            </div>
-          )}
-        </Section>
+              })()}
+            </Section>
 
-        {/* === Customer (with mobile lookup) === */}
-        <Section icon={<User className="h-4 w-4" />} title="Customer">
-          <div className="space-y-3">
-            <div className="relative">
-              <Field icon={<Phone className="h-4 w-4" />} label="Mobile (auto-search · scan barcode)">
-                <Input
-                  inputMode="tel" autoComplete="tel" value={mobile}
-                  onChange={(e) => setMobile(e.target.value)}
-                  placeholder="Type or scan barcode/QR"
-                  className="h-14 border-0 bg-foreground/5 pr-24 text-lg tracking-wide"
-                />
-                <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
-                  {lookupBusy ? <Zap className="h-4 w-4 animate-pulse text-aqua" /> :
-                    mobile.trim().length >= 3 ? <Search className="h-4 w-4 text-aqua" /> : null}
-                  <button
-                    type="button" onClick={() => setScanOpen(true)}
-                    title="Scan barcode/QR"
-                    className="inline-flex items-center gap-1 rounded-lg bg-aqua/15 px-2.5 py-1.5 text-[11px] font-bold text-aqua ring-1 ring-aqua/30 transition hover:bg-aqua/25"
-                  >
-                    <ScanLine className="h-3.5 w-3.5" /> Scan
-                  </button>
-                </div>
-              </Field>
+            <button
+              type="button" onClick={onReview} disabled={blocked}
+              className="group relative inline-flex h-14 w-full shrink-0 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset text-base font-bold text-foreground shadow-glow-sunset transition disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Sparkles className="h-5 w-5" />
+              <span>{blocked ? blockReason : "Review & Confirm"}</span>
+              <ArrowRight className="h-5 w-5 transition group-hover:translate-x-1" />
+              <span className="absolute inset-0 animate-shimmer opacity-50" />
+            </button>
 
-              <AnimatePresence>
-                {lookupOpen && lookupResults.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-                    className="absolute left-0 right-0 z-20 mt-1.5 max-h-72 overflow-y-auto rounded-2xl border border-foreground/10 bg-background/95 p-1.5 shadow-2xl backdrop-blur-xl"
-                  >
-                    <div className="flex items-center justify-between px-3 py-2">
-                      <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-aqua">
-                        <History className="h-3 w-3" /> {lookupResults.length} match{lookupResults.length === 1 ? "" : "es"}
-                      </span>
-                      <button onClick={() => setLookupOpen(false)} className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground hover:bg-foreground/10">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    {lookupResults.map((r) => (
-                      <button key={r.id} type="button" onClick={() => applyCustomer(r)}
-                        className="group flex w-full items-center gap-3 rounded-xl p-3 text-left transition hover:bg-foreground/5">
-                        <div className="grid h-10 w-10 place-items-center rounded-full bg-aqua/15 font-display text-base font-bold text-aqua">
-                          {r.customer_name.charAt(0).toUpperCase()}
+            {lookupResults.length > 0 && (
+              <Section icon={<Search className="h-4 w-4" />} title="Reprint a pass">
+                <div className="space-y-1.5">
+                  {lookupResults.slice(0, 2).map((r) => (
+                    <div key={r.id} className="flex items-center justify-between rounded-xl glass p-2.5">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold">{r.customer_name}</div>
+                        <div className="truncate text-[11px] text-muted-foreground">
+                          {r.mobile} · {r.slots?.name} · {r.guest_count}g
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-semibold">{r.customer_name}</div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {r.mobile} · {r.guest_count}g · {r.slots?.name ?? "—"}
-                          </div>
-                        </div>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-aqua" />
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <Field icon={<User className="h-4 w-4" />} label="Full name">
-              <Input required value={name} onChange={(e) => setName(e.target.value)}
-                className="h-14 border-0 bg-foreground/5 text-lg" />
-            </Field>
-
-            <Field icon={<Mail className="h-4 w-4" />} label="Email (optional)">
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                className="h-14 border-0 bg-foreground/5 text-base" />
-            </Field>
-          </div>
-        </Section>
-
-        {/* === Guests stepper + capacity meter === */}
-        <Section icon={<Users className="h-4 w-4" />} title="Guests"
-          trailing={slot && <span className="text-[11px] text-muted-foreground">max <b className="text-aqua">{Math.min(20, slot.remaining)}</b></span>}
-        >
-          <GuestStepper guests={guests} setGuests={setGuests} maxAllowed={slot ? Math.min(20, Math.max(1, slot.remaining)) : 20} />
-
-          {/* Live capacity meter */}
-          {slot && (() => {
-            const usedAfter = (slot.capacity - slot.remaining) + guests;
-            const pct = Math.min(100, Math.round((usedAfter / Math.max(1, slot.capacity)) * 100));
-            const over = guests > slot.remaining;
-            const full = slot.remaining <= 0;
-            return (
-              <div className="mt-4 rounded-2xl border border-foreground/10 bg-foreground/5 p-3.5">
-                <div className="mb-2 flex items-baseline justify-between text-xs">
-                  <span className="font-semibold text-muted-foreground">After this booking</span>
-                  <span className={`font-display text-base font-bold tabular-nums ${over || full ? "text-coral" : "text-foreground"}`}>
-                    {Math.min(slot.capacity, usedAfter)} / {slot.capacity}
-                  </span>
-                </div>
-                <div className="h-2.5 w-full overflow-hidden rounded-full bg-foreground/10">
-                  <motion.div
-                    initial={false} animate={{ width: `${pct}%` }} transition={{ duration: 0.35 }}
-                    className={`h-full rounded-full bg-gradient-to-r ${meterTone(pct, full || over)}`}
-                  />
-                </div>
-                <AnimatePresence>
-                  {(full || over) && (
-                    <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                      className="mt-3 flex items-center gap-2 rounded-xl border border-coral/30 bg-coral/10 px-3 py-2 text-xs font-semibold text-coral">
-                      <X className="h-3.5 w-3.5" />
-                      {full ? "This slot is full — pick another slot." :
-                        `Only ${slot.remaining} ${slot.remaining === 1 ? "spot" : "spots"} left in this slot.`}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            );
-          })()}
-        </Section>
-
-        {/* === Reprint pass (compact) === */}
-        <Section icon={<Search className="h-4 w-4" />} title="Reprint a pass">
-          <p className="text-xs text-muted-foreground">
-            Type a mobile above to find an existing customer, then reprint or open their pass.
-          </p>
-          {lookupResults.length > 0 && (
-            <div className="mt-3 space-y-1.5">
-              {lookupResults.slice(0, 3).map((r) => (
-                <div key={r.id} className="flex items-center justify-between rounded-xl glass p-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold">{r.customer_name}</div>
-                    <div className="truncate text-[11px] text-muted-foreground">
-                      {r.mobile} · {r.slots?.name} · {r.guest_count}g · {r.status}
+                      </div>
+                      <div className="flex shrink-0 gap-1.5">
+                        <button onClick={() => {
+                          setLastToken(r.qr_token);
+                          setModalMeta({ name: r.customer_name, slot: r.slots?.name, guests: r.guest_count });
+                          setModalOpen(true);
+                        }} className="inline-flex items-center gap-1 rounded-lg bg-aqua/15 px-2.5 py-1.5 text-[11px] font-semibold text-aqua hover:bg-aqua/25">
+                          <QrCode className="h-3.5 w-3.5" /> Reprint
+                        </button>
+                        <Link to="/pass/$token" params={{ token: r.qr_token }} target="_blank"
+                          className="inline-flex items-center gap-1 rounded-lg bg-primary/15 px-2 py-1.5 text-[11px] font-semibold text-primary">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Link>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex shrink-0 gap-1.5">
-                    <button onClick={() => {
-                      setLastToken(r.qr_token);
-                      setModalMeta({ name: r.customer_name, slot: r.slots?.name, guests: r.guest_count });
-                      setModalOpen(true);
-                    }} className="inline-flex items-center gap-1 rounded-lg bg-aqua/15 px-3 py-2 text-xs font-semibold text-aqua hover:bg-aqua/25">
-                      <QrCode className="h-3.5 w-3.5" /> Reprint
-                    </button>
-                    <Link to="/pass/$token" params={{ token: r.qr_token }} target="_blank"
-                      className="inline-flex items-center gap-1 rounded-lg bg-primary/15 px-3 py-2 text-xs font-semibold text-primary">
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </Link>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </Section>
-      </main>
-
-      {/* === Sticky primary action bar === */}
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-foreground/10 bg-background/70 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
-          <div className="hidden min-w-0 flex-1 sm:block">
-            {slot ? (
-              <div className="truncate">
-                <div className="truncate text-xs text-muted-foreground">{slot.name}</div>
-                <div className="truncate font-semibold">{name || "—"} · {guests}g</div>
-              </div>
-            ) : <span className="text-xs text-muted-foreground">Select a slot to continue</span>}
+              </Section>
+            )}
           </div>
-          <button
-            type="button" onClick={onReview} disabled={blocked}
-            className="group relative inline-flex h-14 flex-1 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset text-base font-bold text-foreground shadow-glow-sunset transition disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:px-8"
-          >
-            <Sparkles className="h-5 w-5" />
-            <span>{blocked ? blockReason : "Review & Confirm"}</span>
-            <ArrowRight className="h-5 w-5 transition group-hover:translate-x-1" />
-            <span className="absolute inset-0 animate-shimmer opacity-50" />
-          </button>
         </div>
-      </div>
+      </main>
 
       {/* === Barcode/QR scan modal === */}
       <Dialog open={scanOpen} onOpenChange={setScanOpen}>
