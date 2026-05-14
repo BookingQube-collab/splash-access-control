@@ -81,10 +81,23 @@ function POS() {
         await q.start(
           { facingMode: "environment" }, { fps: 10, qrbox: 240 },
           (decoded) => {
-            const cleaned = decoded.replace(/\D/g, "") || decoded.trim();
-            setMobile(cleaned);
             setScanOpen(false);
-            toast.success(`Scanned ${cleaned}`);
+            const raw = decoded.trim();
+            const tokenMatch = raw.match(/[0-9a-fA-F-]{36}/);
+            if (tokenMatch) {
+              lookupToken({ data: { token: tokenMatch[0] } }).then((r) => {
+                if (r?.result) {
+                  applyCustomer(r.result as Registration);
+                  toast.success(`Loaded ${(r.result as Registration).customer_name}`);
+                } else {
+                  toast.error("QR not recognised");
+                }
+              }).catch(() => toast.error("Lookup failed"));
+            } else {
+              const cleaned = raw.replace(/\D/g, "") || raw;
+              setMobile(cleaned.startsWith("+") ? cleaned : `+${cleaned}`);
+              toast.success(`Scanned ${cleaned}`);
+            }
           },
           () => { /* ignore per-frame errors */ },
         );
