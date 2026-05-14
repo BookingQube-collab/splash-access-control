@@ -134,7 +134,9 @@ function POS() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = mobile.trim();
-    if (q.length < 3) { setLookupResults([]); setLookupOpen(false); return; }
+    // Strip dial code prefix (e.g. "+974") — only search when user typed actual digits
+    const digitsOnly = q.replace(/^\+\d{1,4}/, "").replace(/\D/g, "");
+    if (digitsOnly.length < 3) { setLookupResults([]); setLookupOpen(false); return; }
     setLookupBusy(true);
     debounceRef.current = setTimeout(async () => {
       try {
@@ -351,7 +353,7 @@ function POS() {
                     />
                     <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
                       {lookupBusy ? <Zap className="h-4 w-4 animate-pulse text-aqua" /> :
-                        mobile.trim().length >= 3 ? <Search className="h-4 w-4 text-aqua" /> : null}
+                        mobile.replace(/^\+\d{1,4}/, "").replace(/\D/g, "").length >= 3 ? <Search className="h-4 w-4 text-aqua" /> : null}
                     </div>
                   </Field>
 
