@@ -1,10 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { QRCodeSVG } from "qrcode.react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
+import { useEffect } from "react";
 import { getPass } from "@/lib/summersplash.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { Waves, CheckCircle2, XCircle, LogIn, LogOut, Sun, Users, Hash } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
 
