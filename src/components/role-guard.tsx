@@ -4,11 +4,13 @@ import { useAuth, type AppRole } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { LogOut, Waves } from "lucide-react";
 
-export function RoleGuard({ role, loginPath, children, nav }: {
+export function RoleGuard({ role, loginPath, children, nav, bare }: {
   role: AppRole;
   loginPath: string;
   children: React.ReactNode;
   nav?: React.ReactNode;
+  /** When true, render children without the default header chrome — the route brings its own. */
+  bare?: boolean;
 }) {
   const { loading, session, hasRole, signOut } = useAuth();
   const navigate = useNavigate();
@@ -23,6 +25,8 @@ export function RoleGuard({ role, loginPath, children, nav }: {
   if (loading || !session || !hasRole(role)) {
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Checking access…</div>;
   }
+
+  if (bare) return <>{children}</>;
 
   return (
     <div className="min-h-screen bg-background">
