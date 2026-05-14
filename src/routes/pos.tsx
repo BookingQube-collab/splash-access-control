@@ -390,6 +390,34 @@ function POS() {
         </div>
       </div>
 
+      {/* === Barcode/QR scan modal === */}
+      <Dialog open={scanOpen} onOpenChange={setScanOpen}>
+        <DialogContent className="max-w-md border-0 bg-transparent p-0 shadow-none">
+          <div className="overflow-hidden rounded-3xl glass-strong p-5 shadow-soft">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-aqua/15 text-aqua">
+                  <Camera className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-aqua">Scan</p>
+                  <h3 className="font-display text-base font-extrabold">Mobile barcode / QR</h3>
+                </div>
+              </div>
+              <button onClick={() => setScanOpen(false)} className="grid h-8 w-8 place-items-center rounded-full bg-foreground/10 hover:bg-foreground/20">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="relative aspect-square overflow-hidden rounded-2xl bg-black/70">
+              <div id="pos-scan-reader" className="h-full w-full" />
+            </div>
+            <p className="mt-3 text-center text-[11px] text-muted-foreground">
+              Point at a barcode or QR — the mobile field will fill and search runs automatically.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* === Confirmation modal === */}
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="max-w-md border-0 bg-transparent p-0 shadow-none">
