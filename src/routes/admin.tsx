@@ -485,9 +485,12 @@ function UsersTab() {
       <div className="mb-5 grid gap-2 md:grid-cols-4">
         <Input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-11 border-0 bg-foreground/5" />
         <Input placeholder="Password" type="password" value={pw} onChange={(e) => setPw(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-        <select className="h-11 rounded-xl border-0 bg-foreground/5 px-3 text-sm" value={role} onChange={(e) => setRoleV(e.target.value as any)}>
-          {allRoles.map((r) => <option key={r}>{r}</option>)}
-        </select>
+        <SearchableSelect
+          value={role}
+          onChange={(v) => setRoleV(v as any)}
+          searchable={false}
+          options={allRoles.map((r) => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
+        />
         <button onClick={async () => { try { await create({ data: { email, password: pw, role } }); toast.success("Created"); setEmail(""); setPw(""); qc.invalidateQueries({ queryKey: ["a-users"] }); } catch (e: any) { toast.error(e.message); } }}
           className="rounded-xl bg-aqua text-sm font-semibold text-primary-foreground shadow-glow-aqua">Create user</button>
       </div>
