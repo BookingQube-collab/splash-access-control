@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import {
   Search, User, Phone, Mail, Users, Ticket, ExternalLink, Sparkles,
   QrCode, ArrowRight, CheckCircle2, Edit3, X, History, Zap, ScanLine, Camera,
+  Maximize2, Minimize2,
 } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
 import { QrPassModal } from "@/components/qr-pass-modal";
@@ -22,7 +23,7 @@ export const Route = createFileRoute("/pos")({
 });
 
 type Registration = {
-  id: string; customer_name: string; mobile: string; guest_count: number;
+  id: string; customer_name: string; mobile: string; email?: string | null; guest_count: number;
   qr_token: string; status: string; created_at: string;
   slots?: { name: string; starts_at: string } | null;
 };
@@ -105,9 +106,24 @@ function POS() {
   const applyCustomer = (r: Registration) => {
     setName(r.customer_name);
     setMobile(r.mobile);
+    if (r.email) setEmail(r.email);
     setGuests(Math.max(1, r.guest_count || 1));
     setLookupOpen(false);
     toast.success(`Loaded ${r.customer_name}`);
+  };
+
+  // ---- Fullscreen toggle ----
+  const [isFs, setIsFs] = useState(false);
+  useEffect(() => {
+    const onChange = () => setIsFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+      else await document.exitFullscreen();
+    } catch (e: any) { toast.error(e?.message ?? "Fullscreen unavailable"); }
   };
 
   const slot = useMemo(
@@ -155,16 +171,31 @@ function POS() {
     <div className="relative flex min-h-screen flex-col overflow-hidden">
       <BeachBg variant="ocean" />
 
-      {/* Header (compact) */}
-      <header className="relative z-30 shrink-0 border-b border-foreground/5 bg-background/40 backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between px-4 py-2.5">
-          <div className="flex items-baseline gap-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-aqua">Counter</p>
-            <h1 className="font-display text-lg font-extrabold leading-tight">Point of Sale</h1>
+      {/* Header (compact, premium) */}
+      <header className="relative z-30 shrink-0 border-b border-foreground/5 bg-background/50 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between gap-3 px-4 py-2.5">
+          <div className="flex items-center gap-3">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-aqua/30 to-primary/20 text-aqua shadow-glow-aqua ring-1 ring-aqua/30">
+              <Ticket className="h-4 w-4" />
+            </span>
+            <div className="leading-tight">
+              <p className="text-[9px] font-bold uppercase tracking-[0.35em] text-aqua/80">Counter · POS</p>
+              <h1 className="font-display text-lg font-extrabold">Point of Sale</h1>
+            </div>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full glass px-2.5 py-1 text-[10px] font-semibold">
-            <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> Live
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full glass px-2.5 py-1 text-[10px] font-semibold">
+              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> Live
+            </span>
+            <button
+              type="button" onClick={toggleFullscreen}
+              title={isFs ? "Exit fullscreen" : "Fullscreen"}
+              className="inline-flex items-center gap-1.5 rounded-full bg-foreground/10 px-3 py-1.5 text-[11px] font-bold text-foreground/80 ring-1 ring-foreground/10 transition hover:bg-aqua/15 hover:text-aqua hover:ring-aqua/30"
+            >
+              {isFs ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">{isFs ? "Exit" : "Fullscreen"}</span>
+            </button>
+          </div>
         </div>
       </header>
 
