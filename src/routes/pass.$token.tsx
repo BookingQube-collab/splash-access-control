@@ -1,10 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { QRCodeSVG } from "qrcode.react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
+import { useEffect } from "react";
 import { getPass } from "@/lib/summersplash.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { Waves, CheckCircle2, XCircle, LogIn, LogOut, Sun, Users, Hash } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
 
@@ -16,11 +18,34 @@ export const Route = createFileRoute("/pass/$token")({
 function PassPage() {
   const { token } = Route.useParams();
   const fetchPass = useServerFn(getPass);
-  const { data, isLoading } = useQuery({
+  const qc = useQueryClient();
+  const { data, isLoading, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ["pass", token],
     queryFn: () => fetchPass({ data: { token } }),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
   });
+
+  // Live: subscribe to registration + scan_events for instant status updates.
+  useEffect(() => {
+    if (!data?.id) return;
+    const ch = supabase
+      .channel(`pass-${data.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "registrations", filter: `id=eq.${data.id}` },
+        () => qc.invalidateQueries({ queryKey: ["pass", token] }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "scan_events", filter: `registration_id=eq.${data.id}` },
+        () => qc.invalidateQueries({ queryKey: ["pass", token] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [data?.id, token, qc]);
 
   if (isLoading)
     return (
@@ -109,7 +134,10 @@ function PassPage() {
                     </span>
                     {cfg.icon}{cfg.label}
                   </span>
-                  <span className="text-xs text-muted-foreground">Live · auto refresh</span>
+                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className={`h-1.5 w-1.5 rounded-full ${isFetching ? "bg-aqua animate-pulse" : "bg-aqua/60"}`} />
+                    Live · {dataUpdatedAt ? format(new Date(dataUpdatedAt), "p") : "syncing"}
+                  </span>
                 </div>
 
                 {/* QR with glow */}

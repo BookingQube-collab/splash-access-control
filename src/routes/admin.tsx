@@ -25,6 +25,7 @@ import {
 import { getDashboardCounts } from "@/lib/summersplash.functions";
 import { BeachBg } from "@/components/beach-bg";
 import { AnimatedCount } from "@/components/animated-count";
+import { SearchableSelect } from "@/components/searchable-select";
 
 export const Route = createFileRoute("/admin")({
   component: () => (<RoleGuard role="admin" loginPath="/login/admin"><Admin /></RoleGuard>),
@@ -237,14 +238,16 @@ function SlotsTab() {
         <div className="grid gap-3 md:grid-cols-2">
           <div>
             <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Event</Label>
-            <select className="h-11 w-full rounded-xl border-0 bg-foreground/5 px-3 text-sm" value={eventId} onChange={(e) => setEventId(e.target.value)}>
-              <option value="">Select an event…</option>
-              {(events?.events ?? []).map((e: any) => (
-                <option key={e.id} value={e.id}>
-                  {e.name} · {format(new Date(e.start_date ?? e.event_date), "MMM d")} → {format(new Date(e.end_date ?? e.event_date), "MMM d")}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={eventId}
+              onChange={setEventId}
+              placeholder="Select an event…"
+              searchPlaceholder="Search events…"
+              options={(events?.events ?? []).map((e: any) => {
+                const label = `${e.name} · ${format(new Date(e.start_date ?? e.event_date), "MMM d")} → ${format(new Date(e.end_date ?? e.event_date), "MMM d")}`;
+                return { value: e.id, label, search: label };
+              })}
+            />
           </div>
           <div>
             <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Slot name</Label>
@@ -267,12 +270,17 @@ function SlotsTab() {
           </div>
           <div>
             <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Recurrence</Label>
-            <select className="h-11 w-full rounded-xl border-0 bg-foreground/5 px-3 text-sm" value={recurrence} onChange={(e) => setRecurrence(e.target.value as any)}>
-              <option value="once">Once (start date only)</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-            </select>
+            <SearchableSelect
+              value={recurrence}
+              onChange={(v) => setRecurrence(v as any)}
+              searchable={false}
+              options={[
+                { value: "once", label: "Once (start date only)" },
+                { value: "daily", label: "Daily" },
+                { value: "weekly", label: "Weekly" },
+                { value: "monthly", label: "Monthly" },
+              ]}
+            />
           </div>
         </div>
 
@@ -477,9 +485,12 @@ function UsersTab() {
       <div className="mb-5 grid gap-2 md:grid-cols-4">
         <Input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-11 border-0 bg-foreground/5" />
         <Input placeholder="Password" type="password" value={pw} onChange={(e) => setPw(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-        <select className="h-11 rounded-xl border-0 bg-foreground/5 px-3 text-sm" value={role} onChange={(e) => setRoleV(e.target.value as any)}>
-          {allRoles.map((r) => <option key={r}>{r}</option>)}
-        </select>
+        <SearchableSelect
+          value={role}
+          onChange={(v) => setRoleV(v as any)}
+          searchable={false}
+          options={allRoles.map((r) => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
+        />
         <button onClick={async () => { try { await create({ data: { email, password: pw, role } }); toast.success("Created"); setEmail(""); setPw(""); qc.invalidateQueries({ queryKey: ["a-users"] }); } catch (e: any) { toast.error(e.message); } }}
           className="rounded-xl bg-aqua text-sm font-semibold text-primary-foreground shadow-glow-aqua">Create user</button>
       </div>
