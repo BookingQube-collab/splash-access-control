@@ -77,6 +77,13 @@ function POS() {
           <form onSubmit={submit} className="space-y-5">
             <div>
               <Label className="mb-2 block text-xs uppercase tracking-wider text-muted-foreground">Choose slot</Label>
+              {(data?.slots ?? []).length === 0 ? (
+                <div className="rounded-2xl glass p-4 text-sm text-muted-foreground">No slots configured.</div>
+              ) : (data?.slots ?? []).every((s) => s.remaining <= 0) ? (
+                <div className="rounded-2xl border border-coral/30 bg-coral/10 p-4 text-sm font-semibold text-coral">
+                  All slots are full — no more registrations can be taken right now.
+                </div>
+              ) : (
               <div className="grid grid-cols-2 gap-2.5">
                 {(data?.slots ?? []).map((s) => {
                   const full = s.remaining <= 0;
@@ -90,7 +97,7 @@ function POS() {
                       } ${full ? "cursor-not-allowed opacity-50" : ""}`}>
                       <div className="font-display text-base font-bold">{s.name}</div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {full ? <span className="font-bold text-coral">SOLD OUT</span> : <><b className="text-foreground">{s.remaining}</b> / {s.capacity}</>}
+                        {full ? <span className="font-bold text-coral">SOLD OUT</span> : <><b className="text-foreground">{s.remaining}</b> / {s.capacity} left</>}
                       </div>
                       <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-foreground/10">
                         <div className={`h-full ${full ? "bg-coral" : "bg-gradient-to-r from-aqua to-primary"}`} style={{ width: `${pct}%` }} />
@@ -99,6 +106,7 @@ function POS() {
                   );
                 })}
               </div>
+              )}
             </div>
 
             <div className="grid gap-4">
