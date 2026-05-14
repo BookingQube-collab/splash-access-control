@@ -460,7 +460,7 @@ function POS() {
         </div>
 
         {/* === Trust / feature row === */}
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-auto pt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <TrustCard icon={<ShieldCheck className="h-5 w-5" />} tone="aqua"
             title="Secure & Reliable" body="Your data is encrypted and transactions are secure." />
           <TrustCard icon={<Timer className="h-5 w-5" />} tone="primary"
