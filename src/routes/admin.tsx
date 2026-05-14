@@ -238,14 +238,16 @@ function SlotsTab() {
         <div className="grid gap-3 md:grid-cols-2">
           <div>
             <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Event</Label>
-            <select className="h-11 w-full rounded-xl border-0 bg-foreground/5 px-3 text-sm" value={eventId} onChange={(e) => setEventId(e.target.value)}>
-              <option value="">Select an event…</option>
-              {(events?.events ?? []).map((e: any) => (
-                <option key={e.id} value={e.id}>
-                  {e.name} · {format(new Date(e.start_date ?? e.event_date), "MMM d")} → {format(new Date(e.end_date ?? e.event_date), "MMM d")}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={eventId}
+              onChange={setEventId}
+              placeholder="Select an event…"
+              searchPlaceholder="Search events…"
+              options={(events?.events ?? []).map((e: any) => {
+                const label = `${e.name} · ${format(new Date(e.start_date ?? e.event_date), "MMM d")} → ${format(new Date(e.end_date ?? e.event_date), "MMM d")}`;
+                return { value: e.id, label, search: label };
+              })}
+            />
           </div>
           <div>
             <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Slot name</Label>
