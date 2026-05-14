@@ -219,21 +219,49 @@
   animation: holo 8s ease-in-out infinite;
 }
 
-/* intl phone input theming */
-.intl-phone-wrap .PhoneInput { width: 100%; }
-.intl-phone-wrap .PhoneInputCountry {
-  display: flex; align-items: center; gap: 0.4rem;
-  padding-right: 0.5rem; margin-right: 0.5rem;
+/* react-international-phone theming */
+.rip-wrap {
+  --react-international-phone-height: 2.75rem;
+  --react-international-phone-background-color: transparent;
+  --react-international-phone-text-color: var(--foreground);
+  --react-international-phone-border-color: transparent;
+  --react-international-phone-border-radius: 0.5rem;
+  --react-international-phone-font-size: 1rem;
+  --react-international-phone-country-selector-background-color: transparent;
+  --react-international-phone-country-selector-background-color-hover: color-mix(in oklab, var(--foreground) 8%, transparent);
+  --react-international-phone-country-selector-arrow-color: var(--muted-foreground);
+  --react-international-phone-dropdown-item-background-color: var(--background);
+  --react-international-phone-dropdown-item-background-color-hover: color-mix(in oklab, var(--foreground) 8%, transparent);
+  --react-international-phone-dropdown-item-text-color: var(--foreground);
+  --react-international-phone-dropdown-item-dial-code-color: var(--muted-foreground);
+  --react-international-phone-dropdown-item-font-size: 0.875rem;
+  --react-international-phone-selected-dropdown-item-background-color: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --react-international-phone-selected-dropdown-item-background-color-focus: color-mix(in oklab, var(--foreground) 14%, transparent);
+  --react-international-phone-selected-dropdown-item-text-color: var(--foreground);
+  --react-international-phone-selected-dropdown-zindex: 60;
+  width: 100%;
+}
+.rip-wrap.rip-soft {
+  background: color-mix(in oklab, var(--foreground) 5%, transparent);
+  border-radius: 0.5rem;
+  padding: 0 0.25rem 0 0;
+}
+.rip-wrap.rip-outline {
+  background: var(--background);
+  border: 1px solid var(--input);
+  border-radius: 0.5rem;
+}
+.rip-wrap .react-international-phone-input-container { width: 100%; display: flex; align-items: center; }
+.rip-wrap .react-international-phone-input { width: 100%; background: transparent; color: var(--foreground); border: 0; }
+.rip-wrap .react-international-phone-country-selector-button {
+  border: 0; background: transparent;
   border-right: 1px solid color-mix(in oklab, var(--foreground) 12%, transparent);
+  margin-right: 0.25rem;
 }
-.intl-phone-wrap .PhoneInputCountrySelect { color: var(--foreground); background: transparent; }
-.intl-phone-wrap .PhoneInputCountrySelectArrow {
-  color: var(--muted-foreground); opacity: 0.8;
-  border-color: currentColor; border-bottom-width: 1.5px; border-right-width: 1.5px;
+.rip-wrap .react-international-phone-country-selector-dropdown {
+  background: var(--background);
+  border: 1px solid color-mix(in oklab, var(--foreground) 12%, transparent);
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 32px -8px rgba(0,0,0,0.35);
+  padding: 0.25rem;
 }
-.intl-phone-wrap .PhoneInputInput {
-  flex: 1 1 auto; height: 100%; min-width: 0;
-  background: transparent; color: var(--foreground);
-  border: 0; outline: none; font: inherit;
-}
-.intl-phone-wrap .PhoneInputInput::placeholder { color: var(--muted-foreground); }
