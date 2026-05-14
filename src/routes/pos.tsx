@@ -174,7 +174,7 @@ function POS() {
     "from-aqua to-primary";
 
   return (
-    <div className="relative flex flex-col overflow-hidden">
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-background">
       <BeachBg variant="ocean" />
 
       {/* Header (compact, premium) */}
