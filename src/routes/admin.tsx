@@ -420,14 +420,14 @@ function DashTab() {
 
 function Stat({ label, value, hue, pulse }: { label: string; value: number; hue: string; pulse?: boolean }) {
   return (
-    <div className="rounded-2xl glass p-5">
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl glass p-5 hover-glow">
       <div className="flex items-center justify-between">
         <span className={`grid h-9 w-9 place-items-center rounded-xl ${hue}`}><Activity className="h-4 w-4" /></span>
         {pulse && <span className="h-2 w-2 animate-pulse rounded-full bg-success" />}
       </div>
-      <div className="mt-3 text-3xl font-extrabold">{value}</div>
+      <div className="mt-3 text-3xl font-extrabold tracking-tight"><AnimatedCount value={value} /></div>
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-    </div>
+    </motion.div>
   );
 }
 
