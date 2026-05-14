@@ -134,7 +134,9 @@ function POS() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = mobile.trim();
-    if (q.length < 3) { setLookupResults([]); setLookupOpen(false); return; }
+    // Strip dial code prefix (e.g. "+974") — only search when user typed actual digits
+    const digitsOnly = q.replace(/^\+\d{1,4}/, "").replace(/\D/g, "");
+    if (digitsOnly.length < 3) { setLookupResults([]); setLookupOpen(false); return; }
     setLookupBusy(true);
     debounceRef.current = setTimeout(async () => {
       try {
