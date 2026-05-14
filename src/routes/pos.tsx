@@ -34,6 +34,8 @@ function POS() {
   const fetchEvent = useServerFn(getPublicEvent);
   const register = useServerFn(posRegister);
   const search = useServerFn(searchByMobile);
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
   const { data, refetch } = useQuery({
     queryKey: ["pos-event"], queryFn: () => fetchEvent(),
     refetchInterval: 5000, refetchOnWindowFocus: true,
