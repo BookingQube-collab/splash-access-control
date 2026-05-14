@@ -270,12 +270,17 @@ function SlotsTab() {
           </div>
           <div>
             <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Recurrence</Label>
-            <select className="h-11 w-full rounded-xl border-0 bg-foreground/5 px-3 text-sm" value={recurrence} onChange={(e) => setRecurrence(e.target.value as any)}>
-              <option value="once">Once (start date only)</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-            </select>
+            <SearchableSelect
+              value={recurrence}
+              onChange={(v) => setRecurrence(v as any)}
+              searchable={false}
+              options={[
+                { value: "once", label: "Once (start date only)" },
+                { value: "daily", label: "Daily" },
+                { value: "weekly", label: "Weekly" },
+                { value: "monthly", label: "Monthly" },
+              ]}
+            />
           </div>
         </div>
 
