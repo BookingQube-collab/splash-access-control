@@ -152,17 +152,17 @@ function POS() {
     "from-aqua to-primary";
 
   return (
-    <div className="relative min-h-screen pb-32">
+    <div className="relative flex min-h-screen flex-col overflow-hidden">
       <BeachBg variant="ocean" />
 
-      {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-foreground/5 bg-background/40 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
-          <div>
+      {/* Header (compact) */}
+      <header className="relative z-30 shrink-0 border-b border-foreground/5 bg-background/40 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between px-4 py-2.5">
+          <div className="flex items-baseline gap-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-aqua">Counter</p>
-            <h1 className="font-display text-2xl font-extrabold leading-tight">Point of Sale</h1>
+            <h1 className="font-display text-lg font-extrabold leading-tight">Point of Sale</h1>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full glass px-3 py-1.5 text-[11px] font-semibold">
+          <span className="inline-flex items-center gap-1.5 rounded-full glass px-2.5 py-1 text-[10px] font-semibold">
             <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> Live
           </span>
         </div>
