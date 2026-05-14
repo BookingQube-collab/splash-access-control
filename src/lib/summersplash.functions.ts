@@ -173,6 +173,7 @@ export const getDashboardCounts = createServerFn({ method: "GET" })
         const exited = sumG(exitedRows);
         const auto_exited = sumG(autoExitedRows);
         const used = active + entered;
+        const booked = active + entered + exited + auto_exited;
         return {
           id: s.id,
           name: s.name,
@@ -183,6 +184,7 @@ export const getDashboardCounts = createServerFn({ method: "GET" })
           entered,
           exited,
           auto_exited,
+          booked,
           invalid: invalid.count ?? 0,
           remaining: Math.max(0, s.capacity - used),
         };
