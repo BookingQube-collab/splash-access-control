@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
-  Search, User, Phone, Mail, Users, Ticket, ExternalLink, Sparkles,
+  Search, User, Phone, Mail, ExternalLink, Sparkles,
   QrCode, ArrowRight, CheckCircle2, Edit3, X, History, Zap, ScanLine, Camera,
   Maximize2, Minimize2, Waves, LogOut, ShieldCheck, Timer, BarChart3, Headphones,
   Car, Star, Calendar, Crown, Anchor, Sun,
