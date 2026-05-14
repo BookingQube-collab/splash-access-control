@@ -155,7 +155,20 @@ export const getDashboardCounts = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { supabase } = context;
     const today = new Date().toISOString().slice(0, 10);
-    const { data: events } = await supabase.from("events").select("*").eq("is_active", true).eq("event_date", today);
+    // active event covering today, or fallback to most recent active
+    let { data: events } = await supabase
+      .from("events").select("*")
+      .eq("is_active", true)
+      .lte("start_date", today)
+      .gte("end_date", today);
+    if (!events || events.length === 0) {
+      const { data: fb } = await supabase
+        .from("events").select("*")
+        .eq("is_active", true)
+        .order("event_date", { ascending: false })
+        .limit(1);
+      events = fb ?? [];
+    }
     const evs = events ?? [];
     if (evs.length === 0) return { slots: [] };
     const eventIds = evs.map((e) => e.id);
