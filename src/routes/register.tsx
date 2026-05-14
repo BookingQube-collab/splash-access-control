@@ -95,6 +95,11 @@ function RegisterPage() {
               </div>
               {data.slots.length === 0 ? (
                 <div className="rounded-2xl glass p-6 text-sm text-muted-foreground">No slots configured yet.</div>
+              ) : data.slots.every((s) => s.remaining <= 0) ? (
+                <div className="rounded-2xl border border-coral/30 bg-coral/10 p-6 text-center">
+                  <p className="font-display text-lg font-bold text-coral">All slots are full</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Registration is closed for now. Please check back later. 🌊</p>
+                </div>
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {data.slots.map((s, i) => {
