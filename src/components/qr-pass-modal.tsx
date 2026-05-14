@@ -43,7 +43,7 @@ export function QrPassModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm border-0 bg-transparent p-0 shadow-none [&>button]:hidden">
+      <DialogContent className="max-w-sm border-0 bg-transparent p-0 shadow-none">
         <motion.div
           initial={{ scale: 0.92, opacity: 0, y: 12 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
