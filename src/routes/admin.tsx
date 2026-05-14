@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import {
   adminListEvents, adminUpsertEvent, adminDeleteEvent,
-  adminListSlots, adminUpsertSlot, adminDeleteSlot, adminGenerateSlots,
+  adminListSlots, adminUpsertSlot, adminDeleteSlot,
   adminListRegistrations,
   adminGetSettings, adminSaveSettings,
   adminListUsers, adminCreateUser, adminSetRole, adminDeleteUser,
