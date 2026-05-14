@@ -75,13 +75,21 @@ export const publicRegister = createServerFn({ method: "POST" })
     const { data: slot } = await supabaseAdmin.from("slots").select("*").eq("id", data.slot_id).maybeSingle();
     if (!slot) throw new Error("Slot not found");
 
-    const { count } = await supabaseAdmin
+    // dedup: same slot + mobile within last 30s — return the existing one
+    const since = new Date(Date.now() - 30_000).toISOString();
+    const { data: dupe } = await supabaseAdmin
       .from("registrations")
-      .select("*", { count: "exact", head: true })
+      .select("id, qr_token")
       .eq("slot_id", data.slot_id)
-      .in("status", ["active", "entered"]);
+      .eq("mobile", data.mobile)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (dupe) return { id: dupe.id, qr_token: dupe.qr_token };
 
-    if ((count ?? 0) + data.guest_count > slot.capacity) {
+    const used = await sumGuests(supabaseAdmin, data.slot_id);
+    if (used + data.guest_count > slot.capacity) {
       throw new Error("Slot is full");
     }
 
