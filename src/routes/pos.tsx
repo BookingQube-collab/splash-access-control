@@ -22,6 +22,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/pos")({
+  ssr: false,
   component: () => (<RoleGuard role="pos" loginPath="/login/pos" bare><POS /></RoleGuard>),
 });
 
