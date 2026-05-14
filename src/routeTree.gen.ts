@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RegisterRouteImport } from './routes/register'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LoginScannerRouteImport } from './routes/login.scanner'
 import { Route as LoginPosRouteImport } from './routes/login.pos'
 import { Route as LoginDashboardRouteImport } from './routes/login.dashboard'
 import { Route as LoginAdminRouteImport } from './routes/login.admin'
 
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -43,6 +49,7 @@ const LoginAdminRoute = LoginAdminRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/register': typeof RegisterRoute
   '/login/admin': typeof LoginAdminRoute
   '/login/dashboard': typeof LoginDashboardRoute
   '/login/pos': typeof LoginPosRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/register': typeof RegisterRoute
   '/login/admin': typeof LoginAdminRoute
   '/login/dashboard': typeof LoginDashboardRoute
   '/login/pos': typeof LoginPosRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/register': typeof RegisterRoute
   '/login/admin': typeof LoginAdminRoute
   '/login/dashboard': typeof LoginDashboardRoute
   '/login/pos': typeof LoginPosRoute
@@ -67,6 +76,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/register'
     | '/login/admin'
     | '/login/dashboard'
     | '/login/pos'
@@ -74,6 +84,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/register'
     | '/login/admin'
     | '/login/dashboard'
     | '/login/pos'
@@ -81,6 +92,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/register'
     | '/login/admin'
     | '/login/dashboard'
     | '/login/pos'
@@ -89,6 +101,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  RegisterRoute: typeof RegisterRoute
   LoginAdminRoute: typeof LoginAdminRoute
   LoginDashboardRoute: typeof LoginDashboardRoute
   LoginPosRoute: typeof LoginPosRoute
@@ -97,6 +110,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -137,6 +157,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  RegisterRoute: RegisterRoute,
   LoginAdminRoute: LoginAdminRoute,
   LoginDashboardRoute: LoginDashboardRoute,
   LoginPosRoute: LoginPosRoute,
