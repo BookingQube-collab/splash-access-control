@@ -77,6 +77,13 @@ function POS() {
           <form onSubmit={submit} className="space-y-5">
             <div>
               <Label className="mb-2 block text-xs uppercase tracking-wider text-muted-foreground">Choose slot</Label>
+              {(data?.slots ?? []).length === 0 ? (
+                <div className="rounded-2xl glass p-4 text-sm text-muted-foreground">No slots configured.</div>
+              ) : (data?.slots ?? []).every((s) => s.remaining <= 0) ? (
+                <div className="rounded-2xl border border-coral/30 bg-coral/10 p-4 text-sm font-semibold text-coral">
+                  All slots are full — no more registrations can be taken right now.
+                </div>
+              ) : (
               <div className="grid grid-cols-2 gap-2.5">
                 {(data?.slots ?? []).map((s) => {
                   const full = s.remaining <= 0;
@@ -90,7 +97,7 @@ function POS() {
                       } ${full ? "cursor-not-allowed opacity-50" : ""}`}>
                       <div className="font-display text-base font-bold">{s.name}</div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {full ? <span className="font-bold text-coral">SOLD OUT</span> : <><b className="text-foreground">{s.remaining}</b> / {s.capacity}</>}
+                        {full ? <span className="font-bold text-coral">SOLD OUT</span> : <><b className="text-foreground">{s.remaining}</b> / {s.capacity} left</>}
                       </div>
                       <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-foreground/10">
                         <div className={`h-full ${full ? "bg-coral" : "bg-gradient-to-r from-aqua to-primary"}`} style={{ width: `${pct}%` }} />
@@ -99,6 +106,7 @@ function POS() {
                   );
                 })}
               </div>
+              )}
             </div>
 
             <div className="grid gap-4">
@@ -118,12 +126,31 @@ function POS() {
               </PField>
             </div>
 
-            <button type="submit"
-              className="group relative inline-flex h-14 w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset text-base font-semibold text-foreground shadow-glow-sunset">
-              <Sparkles className="h-5 w-5" />
-              <span>Register & Generate QR</span>
-              <span className="absolute inset-0 animate-shimmer opacity-50" />
-            </button>
+            {(() => {
+              const slot = (data?.slots ?? []).find((s) => s.id === slotId);
+              if (!slot) return null;
+              const full = slot.remaining <= 0;
+              const over = !full && guests > slot.remaining;
+              if (!full && !over) return null;
+              return (
+                <div className="rounded-xl border border-coral/30 bg-coral/10 px-4 py-3 text-xs font-semibold text-coral">
+                  {full ? "Selected slot is full — pick another slot." : `Only ${slot.remaining} ${slot.remaining === 1 ? "spot" : "spots"} left — reduce guest count.`}
+                </div>
+              );
+            })()}
+
+            {(() => {
+              const slot = (data?.slots ?? []).find((s) => s.id === slotId);
+              const blocked = !slot || slot.remaining <= 0 || guests > slot.remaining;
+              return (
+                <button type="submit" disabled={blocked}
+                  className="group relative inline-flex h-14 w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset text-base font-semibold text-foreground shadow-glow-sunset disabled:cursor-not-allowed disabled:opacity-50">
+                  <Sparkles className="h-5 w-5" />
+                  <span>{blocked && slot ? (slot.remaining <= 0 ? "Slot full" : "Not enough capacity") : "Register & Generate QR"}</span>
+                  <span className="absolute inset-0 animate-shimmer opacity-50" />
+                </button>
+              );
+            })()}
           </form>
         </div>
 

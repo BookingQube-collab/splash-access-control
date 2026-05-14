@@ -95,6 +95,11 @@ function RegisterPage() {
               </div>
               {data.slots.length === 0 ? (
                 <div className="rounded-2xl glass p-6 text-sm text-muted-foreground">No slots configured yet.</div>
+              ) : data.slots.every((s) => s.remaining <= 0) ? (
+                <div className="rounded-2xl border border-coral/30 bg-coral/10 p-6 text-center">
+                  <p className="font-display text-lg font-bold text-coral">All slots are full</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Registration is closed for now. Please check back later. 🌊</p>
+                </div>
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {data.slots.map((s, i) => {
@@ -204,15 +209,38 @@ function RegisterPage() {
               <FloatField id="remail" label="Email (optional)" type="email" value={email} onChange={setEmail} icon={<Mail className="h-4 w-4" />} maxLength={255} />
             </div>
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="mt-6 group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset py-4 font-semibold text-foreground shadow-glow-sunset disabled:opacity-50"
-            >
-              <span className="relative z-10">{submitting ? "Reserving your spot…" : "Get my QR pass"}</span>
-              <ChevronRight className="relative z-10 h-5 w-5 transition-transform group-hover:translate-x-1" />
-              <span className="absolute inset-0 animate-shimmer opacity-60" />
-            </button>
+            {(() => {
+              const slot = data?.slots.find((s) => s.id === slotId);
+              if (!slot) return null;
+              const full = slot.remaining <= 0;
+              const over = !full && guests > slot.remaining;
+              if (!full && !over) return null;
+              return (
+                <div className="mt-4 rounded-xl border border-coral/30 bg-coral/10 px-4 py-3 text-xs text-coral">
+                  {full
+                    ? "This slot is full — please pick another slot."
+                    : `Only ${slot.remaining} ${slot.remaining === 1 ? "spot" : "spots"} left in this slot. Reduce guest count to continue.`}
+                </div>
+              );
+            })()}
+
+            {(() => {
+              const slot = data?.slots.find((s) => s.id === slotId);
+              const blocked = !slot || slot.remaining <= 0 || guests > slot.remaining;
+              return (
+                <button
+                  type="submit"
+                  disabled={submitting || blocked}
+                  className="mt-6 group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset py-4 font-semibold text-foreground shadow-glow-sunset disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span className="relative z-10">
+                    {submitting ? "Reserving your spot…" : blocked && slot ? (slot.remaining <= 0 ? "Slot full" : "Not enough capacity") : "Get my QR pass"}
+                  </span>
+                  <ChevronRight className="relative z-10 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                  <span className="absolute inset-0 animate-shimmer opacity-60" />
+                </button>
+              );
+            })()}
           </motion.form>
         </DialogContent>
       </Dialog>
