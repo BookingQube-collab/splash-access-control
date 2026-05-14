@@ -296,7 +296,7 @@ export const searchByMobile = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: regs } = await context.supabase
       .from("registrations")
-      .select("id, customer_name, mobile, guest_count, qr_token, status, created_at, slots(name, starts_at)")
+      .select("id, customer_name, mobile, email, guest_count, qr_token, status, created_at, slots(name, starts_at)")
       .ilike("mobile", `%${data.mobile}%`)
       .order("created_at", { ascending: false })
       .limit(20);
