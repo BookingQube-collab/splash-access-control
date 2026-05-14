@@ -232,33 +232,34 @@ function POS() {
                   {(data?.slots ?? []).map((s) => {
                     const full = s.remaining <= 0;
                     const selected = slotId === s.id;
-                    const pct = Math.min(100, Math.round(((s.capacity - s.remaining) / Math.max(1, s.capacity)) * 100));
+                    const booked = s.capacity - s.remaining;
+                    const pct = Math.min(100, Math.round((booked / Math.max(1, s.capacity)) * 100));
                     return (
                       <motion.button
                         key={s.id} type="button" whileTap={{ scale: 0.97 }}
                         onClick={() => !full && setSlotId(s.id)} disabled={full}
-                        className={`relative overflow-hidden rounded-xl p-2.5 text-left transition ${
-                          selected ? "glass-strong ring-2 ring-primary shadow-glow-aqua"
+                        className={`relative overflow-hidden rounded-2xl p-4 text-left transition ${
+                          selected ? "glass-strong ring-2 ring-aqua shadow-glow-aqua"
                                    : "glass hover:ring-1 hover:ring-aqua/40"
                         } ${full ? "cursor-not-allowed opacity-50" : ""}`}
                       >
                         {selected && (
-                          <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-primary-foreground">
+                          <span className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full bg-aqua text-primary-foreground">
                             <CheckCircle2 className="h-3 w-3" />
                           </span>
                         )}
-                        <div className="font-display text-sm font-bold leading-tight">{s.name}</div>
-                        <div className="mt-1 flex items-baseline gap-1 text-[11px]">
+                        <div className="font-display text-base font-bold leading-tight">{s.name}</div>
+                        <div className="mt-2 flex items-baseline gap-1">
                           {full ? (
-                            <span className="rounded-md bg-coral/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-coral">Full</span>
+                            <span className="rounded-md bg-coral/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-coral">Full</span>
                           ) : (
                             <>
-                              <span className="font-display text-base font-extrabold tabular-nums text-foreground">{s.remaining}</span>
-                              <span className="text-muted-foreground">/ {s.capacity}</span>
+                              <span className="font-display text-2xl font-extrabold tabular-nums text-foreground">{booked}</span>
+                              <span className="text-xs text-muted-foreground">/ {s.capacity}</span>
                             </>
                           )}
                         </div>
-                        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-foreground/10">
+                        <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-foreground/10">
                           <motion.div
                             initial={false} animate={{ width: `${pct}%` }} transition={{ duration: 0.4 }}
                             className={`h-full rounded-full bg-gradient-to-r ${meterTone(pct, full)}`}
