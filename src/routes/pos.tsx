@@ -12,11 +12,13 @@ import { toast } from "sonner";
 import {
   Search, User, Phone, Mail, Users, Ticket, ExternalLink, Sparkles,
   QrCode, ArrowRight, CheckCircle2, Edit3, X, History, Zap, ScanLine, Camera,
-  Maximize2, Minimize2,
+  Maximize2, Minimize2, Waves, LogOut, ShieldCheck, Timer, BarChart3, Headphones,
 } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
 import { QrPassModal } from "@/components/qr-pass-modal";
 import { Html5Qrcode } from "html5-qrcode";
+import { useAuth } from "@/hooks/use-auth";
+import { useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/pos")({
   component: () => (<RoleGuard role="pos" loginPath="/login/pos"><POS /></RoleGuard>),
