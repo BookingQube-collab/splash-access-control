@@ -63,6 +63,28 @@ function POS() {
 
   // ---- Barcode/QR scanner for mobile lookup ----
   const [scanOpen, setScanOpen] = useState(false);
+  const [scanInput, setScanInput] = useState("");
+
+  const handleScanSubmit = (raw: string) => {
+    const text = (raw ?? "").trim();
+    if (!text) return;
+    const tokenMatch = text.match(/[0-9a-fA-F-]{36}/);
+    if (tokenMatch) {
+      lookupToken({ data: { token: tokenMatch[0] } }).then((r) => {
+        if (r?.result) {
+          applyCustomer(r.result as Registration);
+        } else {
+          toast.error("QR not recognised");
+        }
+      }).catch(() => toast.error("Lookup failed"));
+    } else {
+      const cleaned = text.replace(/\D/g, "") || text;
+      setMobile(cleaned.startsWith("+") ? cleaned : `+${cleaned}`);
+      toast.success(`Scanned ${cleaned}`);
+    }
+    setScanInput("");
+  };
+
   const scanRef = useRef<Html5Qrcode | null>(null);
   const stopScanner = async () => {
     if (scanRef.current) {
