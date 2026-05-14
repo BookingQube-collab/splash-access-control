@@ -37,15 +37,26 @@ async function loadSlots(event: { id: string; name: string; event_date: string }
 
   const result = await Promise.all(
     (slots ?? []).map(async (s) => {
-      const { count } = await supabaseAdmin
+      const { data: regs } = await supabaseAdmin
         .from("registrations")
-        .select("*", { count: "exact", head: true })
+        .select("guest_count")
         .eq("slot_id", s.id)
         .in("status", ["active", "entered"]);
-      return { ...s, registered: count ?? 0, remaining: s.capacity - (count ?? 0) };
+      const used = (regs ?? []).reduce((sum, r: any) => sum + (r.guest_count ?? 1), 0);
+      return { ...s, registered: used, remaining: Math.max(0, s.capacity - used) };
     })
   );
   return { event, slots: result };
+}
+
+// Sum of guest_count for a slot in active/entered status
+async function sumGuests(client: any, slotId: string) {
+  const { data } = await client
+    .from("registrations")
+    .select("guest_count")
+    .eq("slot_id", slotId)
+    .in("status", ["active", "entered"]);
+  return (data ?? []).reduce((sum: number, r: any) => sum + (r.guest_count ?? 1), 0);
 }
 
 // ============ PUBLIC: register a customer ============
@@ -64,13 +75,21 @@ export const publicRegister = createServerFn({ method: "POST" })
     const { data: slot } = await supabaseAdmin.from("slots").select("*").eq("id", data.slot_id).maybeSingle();
     if (!slot) throw new Error("Slot not found");
 
-    const { count } = await supabaseAdmin
+    // dedup: same slot + mobile within last 30s — return the existing one
+    const since = new Date(Date.now() - 30_000).toISOString();
+    const { data: dupe } = await supabaseAdmin
       .from("registrations")
-      .select("*", { count: "exact", head: true })
+      .select("id, qr_token")
       .eq("slot_id", data.slot_id)
-      .in("status", ["active", "entered"]);
+      .eq("mobile", data.mobile)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (dupe) return { id: dupe.id, qr_token: dupe.qr_token };
 
-    if ((count ?? 0) + data.guest_count > slot.capacity) {
+    const used = await sumGuests(supabaseAdmin, data.slot_id);
+    if (used + data.guest_count > slot.capacity) {
       throw new Error("Slot is full");
     }
 
@@ -141,26 +160,31 @@ export const getDashboardCounts = createServerFn({ method: "GET" })
     const { data: slots } = await supabase.from("slots").select("*").in("event_id", eventIds).order("starts_at");
     const result = await Promise.all(
       (slots ?? []).map(async (s) => {
-        const [active, entered, exited, autoExited, invalid] = await Promise.all([
-          supabase.from("registrations").select("*", { count: "exact", head: true }).eq("slot_id", s.id).eq("status", "active"),
-          supabase.from("registrations").select("*", { count: "exact", head: true }).eq("slot_id", s.id).eq("status", "entered"),
-          supabase.from("registrations").select("*", { count: "exact", head: true }).eq("slot_id", s.id).eq("status", "exited"),
-          supabase.from("registrations").select("*", { count: "exact", head: true }).eq("slot_id", s.id).eq("status", "auto_exited"),
+        const [activeRows, enteredRows, exitedRows, autoExitedRows, invalid] = await Promise.all([
+          supabase.from("registrations").select("guest_count").eq("slot_id", s.id).eq("status", "active"),
+          supabase.from("registrations").select("guest_count").eq("slot_id", s.id).eq("status", "entered"),
+          supabase.from("registrations").select("guest_count").eq("slot_id", s.id).eq("status", "exited"),
+          supabase.from("registrations").select("guest_count").eq("slot_id", s.id).eq("status", "auto_exited"),
           supabase.from("scan_events").select("*", { count: "exact", head: true }).eq("slot_id", s.id).eq("result", "invalid"),
         ]);
-        const used = (active.count ?? 0) + (entered.count ?? 0);
+        const sumG = (rows: any) => (rows.data ?? []).reduce((a: number, r: any) => a + (r.guest_count ?? 1), 0);
+        const active = sumG(activeRows);
+        const entered = sumG(enteredRows);
+        const exited = sumG(exitedRows);
+        const auto_exited = sumG(autoExitedRows);
+        const used = active + entered;
         return {
           id: s.id,
           name: s.name,
           starts_at: s.starts_at,
           ends_at: s.ends_at,
           capacity: s.capacity,
-          active: active.count ?? 0,
-          entered: entered.count ?? 0,
-          exited: exited.count ?? 0,
-          auto_exited: autoExited.count ?? 0,
+          active,
+          entered,
+          exited,
+          auto_exited,
           invalid: invalid.count ?? 0,
-          remaining: s.capacity - used,
+          remaining: Math.max(0, s.capacity - used),
         };
       })
     );
@@ -237,9 +261,21 @@ export const posRegister = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: slot } = await context.supabase.from("slots").select("*").eq("id", data.slot_id).maybeSingle();
     if (!slot) throw new Error("Slot not found");
-    const { count } = await context.supabase
-      .from("registrations").select("*", { count: "exact", head: true }).eq("slot_id", data.slot_id).in("status", ["active", "entered"]);
-    if ((count ?? 0) + data.guest_count > slot.capacity) throw new Error("Slot is full");
+    // dedup: same slot + mobile within last 30s — return existing
+    const since = new Date(Date.now() - 30_000).toISOString();
+    const { data: dupe } = await context.supabase
+      .from("registrations")
+      .select("id, qr_token")
+      .eq("slot_id", data.slot_id)
+      .eq("mobile", data.mobile)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (dupe) return { id: dupe.id, qr_token: dupe.qr_token };
+
+    const used = await sumGuests(context.supabase, data.slot_id);
+    if (used + data.guest_count > slot.capacity) throw new Error("Slot is full");
 
     const { data: reg, error } = await context.supabase.from("registrations").insert({
       slot_id: data.slot_id,
