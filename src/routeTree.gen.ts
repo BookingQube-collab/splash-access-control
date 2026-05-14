@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ScannerRouteImport } from './routes/scanner'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as PosRouteImport } from './routes/pos'
+import { Route as MyPassesRouteImport } from './routes/my-passes'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
@@ -34,6 +35,11 @@ const RegisterRoute = RegisterRouteImport.update({
 const PosRoute = PosRouteImport.update({
   id: '/pos',
   path: '/pos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MyPassesRoute = MyPassesRouteImport.update({
+  id: '/my-passes',
+  path: '/my-passes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/dashboard': typeof DashboardRoute
+  '/my-passes': typeof MyPassesRoute
   '/pos': typeof PosRoute
   '/register': typeof RegisterRoute
   '/scanner': typeof ScannerRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/dashboard': typeof DashboardRoute
+  '/my-passes': typeof MyPassesRoute
   '/pos': typeof PosRoute
   '/register': typeof RegisterRoute
   '/scanner': typeof ScannerRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/dashboard': typeof DashboardRoute
+  '/my-passes': typeof MyPassesRoute
   '/pos': typeof PosRoute
   '/register': typeof RegisterRoute
   '/scanner': typeof ScannerRoute
@@ -123,6 +132,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/dashboard'
+    | '/my-passes'
     | '/pos'
     | '/register'
     | '/scanner'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/dashboard'
+    | '/my-passes'
     | '/pos'
     | '/register'
     | '/scanner'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/dashboard'
+    | '/my-passes'
     | '/pos'
     | '/register'
     | '/scanner'
@@ -163,6 +175,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   DashboardRoute: typeof DashboardRoute
+  MyPassesRoute: typeof MyPassesRoute
   PosRoute: typeof PosRoute
   RegisterRoute: typeof RegisterRoute
   ScannerRoute: typeof ScannerRoute
@@ -194,6 +207,13 @@ declare module '@tanstack/react-router' {
       path: '/pos'
       fullPath: '/pos'
       preLoaderRoute: typeof PosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/my-passes': {
+      id: '/my-passes'
+      path: '/my-passes'
+      fullPath: '/my-passes'
+      preLoaderRoute: typeof MyPassesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -259,6 +279,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   DashboardRoute: DashboardRoute,
+  MyPassesRoute: MyPassesRoute,
   PosRoute: PosRoute,
   RegisterRoute: RegisterRoute,
   ScannerRoute: ScannerRoute,
@@ -271,3 +292,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
