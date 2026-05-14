@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import {
   Phone, ArrowRight, Ticket, Users, Calendar, QrCode, ExternalLink,
-  CheckCircle2, LogOut, Clock, AlertTriangle, Search, ShieldCheck, X,
+  CheckCircle2, LogOut, Clock, AlertTriangle, Search, ShieldCheck,
 } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
 import { Input } from "@/components/ui/input";
