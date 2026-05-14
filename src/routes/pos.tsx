@@ -106,9 +106,24 @@ function POS() {
   const applyCustomer = (r: Registration) => {
     setName(r.customer_name);
     setMobile(r.mobile);
+    if (r.email) setEmail(r.email);
     setGuests(Math.max(1, r.guest_count || 1));
     setLookupOpen(false);
     toast.success(`Loaded ${r.customer_name}`);
+  };
+
+  // ---- Fullscreen toggle ----
+  const [isFs, setIsFs] = useState(false);
+  useEffect(() => {
+    const onChange = () => setIsFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+      else await document.exitFullscreen();
+    } catch (e: any) { toast.error(e?.message ?? "Fullscreen unavailable"); }
   };
 
   const slot = useMemo(
