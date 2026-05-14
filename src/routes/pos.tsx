@@ -353,10 +353,20 @@ function POS() {
 
           {/* === RIGHT column: guests, capacity, confirm, reprint === */}
           <div className="flex flex-col gap-3 lg:col-span-5">
-            <Section icon={<Users className="h-4 w-4" />} title="Guests"
-              trailing={slot && <span className="text-[11px] text-muted-foreground">max <b className="text-aqua">{Math.min(20, slot.remaining)}</b></span>}
-            >
+            <Section step={3} title="Guests">
               <GuestStepper guests={guests} setGuests={setGuests} maxAllowed={slot ? Math.min(20, Math.max(1, slot.remaining)) : 20} />
+
+              <div className="mt-3 flex items-center gap-3 rounded-2xl border border-foreground/10 bg-foreground/5 p-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-aqua/15 text-aqua ring-1 ring-aqua/25">
+                  <Calendar className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold leading-tight">Select the number of guests</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Maximum {slot ? Math.min(20, Math.max(1, slot.remaining)) : 20} guests per booking
+                  </div>
+                </div>
+              </div>
 
               {slot && (() => {
                 const usedAfter = (slot.capacity - slot.remaining) + guests;
@@ -394,12 +404,12 @@ function POS() {
 
             <button
               type="button" onClick={onReview} disabled={blocked}
-              className="group relative inline-flex h-16 w-full shrink-0 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset text-base font-bold text-foreground shadow-glow-sunset transition disabled:cursor-not-allowed disabled:opacity-50"
+              className="group relative inline-flex h-16 w-full shrink-0 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-[#ff7a45] via-[#ff5b6a] to-[#ff4d8a] text-base font-bold text-white shadow-[0_18px_40px_-12px_rgba(255,90,106,0.7)] transition disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Sparkles className="h-5 w-5" />
               <span>{blocked ? blockReason : "Review & Confirm"}</span>
               <ArrowRight className="h-5 w-5 transition group-hover:translate-x-1" />
-              <span className="absolute inset-0 animate-shimmer opacity-50" />
+              <span className="absolute inset-0 animate-shimmer opacity-30" />
             </button>
 
             {lookupResults.length > 0 && (
