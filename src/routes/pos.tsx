@@ -233,7 +233,7 @@ function POS() {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto w-full max-w-[1400px] px-3 py-3 sm:px-4">
+      <main className="relative z-10 mx-auto flex w-full max-w-[1400px] flex-1 flex-col px-3 py-3 sm:px-4">
         <div className="grid h-full gap-3 lg:grid-cols-12">
           {/* === LEFT column: slots + customer === */}
           <div className="space-y-3 lg:col-span-7">
