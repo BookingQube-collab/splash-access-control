@@ -12,11 +12,13 @@ import { toast } from "sonner";
 import {
   Search, User, Phone, Mail, Users, Ticket, ExternalLink, Sparkles,
   QrCode, ArrowRight, CheckCircle2, Edit3, X, History, Zap, ScanLine, Camera,
-  Maximize2, Minimize2,
+  Maximize2, Minimize2, Waves, LogOut, ShieldCheck, Timer, BarChart3, Headphones,
 } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
 import { QrPassModal } from "@/components/qr-pass-modal";
 import { Html5Qrcode } from "html5-qrcode";
+import { useAuth } from "@/hooks/use-auth";
+import { useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/pos")({
   component: () => (<RoleGuard role="pos" loginPath="/login/pos"><POS /></RoleGuard>),
@@ -32,6 +34,8 @@ function POS() {
   const fetchEvent = useServerFn(getPublicEvent);
   const register = useServerFn(posRegister);
   const search = useServerFn(searchByMobile);
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
   const { data, refetch } = useQuery({
     queryKey: ["pos-event"], queryFn: () => fetchEvent(),
     refetchInterval: 5000, refetchOnWindowFocus: true,
@@ -173,27 +177,40 @@ function POS() {
 
       {/* Header (compact, premium) */}
       <header className="relative z-30 shrink-0 border-b border-foreground/5 bg-background/50 backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between gap-3 px-4 py-2.5">
-          <div className="flex items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-aqua/30 to-primary/20 text-aqua shadow-glow-aqua ring-1 ring-aqua/30">
-              <Ticket className="h-4 w-4" />
-            </span>
-            <div className="leading-tight">
+        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between gap-3 px-4 py-3">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-aqua/30 to-primary/20 text-aqua shadow-glow-aqua ring-1 ring-aqua/30">
+                <Waves className="h-4 w-4" />
+              </span>
+              <span className="font-display text-xl font-extrabold tracking-tight">SummerSplash</span>
+            </div>
+            <span className="hidden h-9 w-px bg-foreground/10 sm:block" />
+            <div className="hidden leading-tight sm:block">
               <p className="text-[9px] font-bold uppercase tracking-[0.35em] text-aqua/80">Counter · POS</p>
               <h1 className="font-display text-lg font-extrabold">Point of Sale</h1>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full glass px-2.5 py-1 text-[10px] font-semibold">
+            <span className="inline-flex items-center gap-1.5 rounded-full glass px-3 py-1.5 text-[11px] font-semibold">
               <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> Live
             </span>
             <button
               type="button" onClick={toggleFullscreen}
               title={isFs ? "Exit fullscreen" : "Fullscreen"}
-              className="inline-flex items-center gap-1.5 rounded-full bg-foreground/10 px-3 py-1.5 text-[11px] font-bold text-foreground/80 ring-1 ring-foreground/10 transition hover:bg-aqua/15 hover:text-aqua hover:ring-aqua/30"
+              className="inline-flex items-center gap-1.5 rounded-full bg-foreground/5 px-3 py-1.5 text-[11px] font-bold text-foreground/80 ring-1 ring-foreground/10 transition hover:bg-aqua/15 hover:text-aqua hover:ring-aqua/30"
             >
               {isFs ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
               <span className="hidden sm:inline">{isFs ? "Exit" : "Fullscreen"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={async () => { await signOut(); navigate({ to: "/login/pos" }); }}
+              title="Sign out"
+              className="inline-flex items-center gap-1.5 rounded-full bg-foreground/5 px-3 py-1.5 text-[11px] font-bold text-foreground/80 ring-1 ring-foreground/10 transition hover:bg-coral/15 hover:text-coral hover:ring-coral/30"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Sign out</span>
             </button>
           </div>
         </div>
@@ -215,33 +232,34 @@ function POS() {
                   {(data?.slots ?? []).map((s) => {
                     const full = s.remaining <= 0;
                     const selected = slotId === s.id;
-                    const pct = Math.min(100, Math.round(((s.capacity - s.remaining) / Math.max(1, s.capacity)) * 100));
+                    const booked = s.capacity - s.remaining;
+                    const pct = Math.min(100, Math.round((booked / Math.max(1, s.capacity)) * 100));
                     return (
                       <motion.button
                         key={s.id} type="button" whileTap={{ scale: 0.97 }}
                         onClick={() => !full && setSlotId(s.id)} disabled={full}
-                        className={`relative overflow-hidden rounded-xl p-2.5 text-left transition ${
-                          selected ? "glass-strong ring-2 ring-primary shadow-glow-aqua"
+                        className={`relative overflow-hidden rounded-2xl p-4 text-left transition ${
+                          selected ? "glass-strong ring-2 ring-aqua shadow-glow-aqua"
                                    : "glass hover:ring-1 hover:ring-aqua/40"
                         } ${full ? "cursor-not-allowed opacity-50" : ""}`}
                       >
                         {selected && (
-                          <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-primary-foreground">
+                          <span className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full bg-aqua text-primary-foreground">
                             <CheckCircle2 className="h-3 w-3" />
                           </span>
                         )}
-                        <div className="font-display text-sm font-bold leading-tight">{s.name}</div>
-                        <div className="mt-1 flex items-baseline gap-1 text-[11px]">
+                        <div className="font-display text-base font-bold leading-tight">{s.name}</div>
+                        <div className="mt-2 flex items-baseline gap-1">
                           {full ? (
-                            <span className="rounded-md bg-coral/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-coral">Full</span>
+                            <span className="rounded-md bg-coral/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-coral">Full</span>
                           ) : (
                             <>
-                              <span className="font-display text-base font-extrabold tabular-nums text-foreground">{s.remaining}</span>
-                              <span className="text-muted-foreground">/ {s.capacity}</span>
+                              <span className="font-display text-2xl font-extrabold tabular-nums text-foreground">{booked}</span>
+                              <span className="text-xs text-muted-foreground">/ {s.capacity}</span>
                             </>
                           )}
                         </div>
-                        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-foreground/10">
+                        <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-foreground/10">
                           <motion.div
                             initial={false} animate={{ width: `${pct}%` }} transition={{ duration: 0.4 }}
                             className={`h-full rounded-full bg-gradient-to-r ${meterTone(pct, full)}`}
@@ -368,7 +386,7 @@ function POS() {
 
             <button
               type="button" onClick={onReview} disabled={blocked}
-              className="group relative inline-flex h-14 w-full shrink-0 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset text-base font-bold text-foreground shadow-glow-sunset transition disabled:cursor-not-allowed disabled:opacity-50"
+              className="group relative inline-flex h-16 w-full shrink-0 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset text-base font-bold text-foreground shadow-glow-sunset transition disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Sparkles className="h-5 w-5" />
               <span>{blocked ? blockReason : "Review & Confirm"}</span>
@@ -407,7 +425,26 @@ function POS() {
             )}
           </div>
         </div>
+
+        {/* === Trust / feature row === */}
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <TrustCard icon={<ShieldCheck className="h-5 w-5" />} tone="aqua"
+            title="Secure & Reliable" body="Your data is encrypted and transactions are secure." />
+          <TrustCard icon={<Timer className="h-5 w-5" />} tone="primary"
+            title="Fast Check-in" body="Quick scanning and auto guest lookup." />
+          <TrustCard icon={<BarChart3 className="h-5 w-5" />} tone="success"
+            title="Real-time Updates" body="Live capacity and slot availability." />
+          <TrustCard icon={<Headphones className="h-5 w-5" />} tone="sunset"
+            title="Support" body="Need help? Our support team is here for you." />
+        </div>
       </main>
+
+      <footer className="relative z-10 mt-3 border-t border-foreground/5 bg-background/40 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-[1400px] flex-wrap items-center justify-between gap-2 px-4 py-3 text-[11px] text-muted-foreground">
+          <span>© {new Date().getFullYear()} SummerSplash. All rights reserved.</span>
+          <span className="tabular-nums">v1.0.0</span>
+        </div>
+      </footer>
 
       {/* === Barcode/QR scan modal === */}
       <Dialog open={scanOpen} onOpenChange={setScanOpen}>
@@ -539,6 +576,28 @@ function FullBanner({ children }: { children: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-coral/30 bg-coral/10 p-4 text-sm font-semibold text-coral">
       {children}
+    </div>
+  );
+}
+
+function TrustCard({ icon, tone, title, body }: {
+  icon: React.ReactNode; tone: "aqua" | "primary" | "success" | "sunset"; title: string; body: string;
+}) {
+  const toneMap: Record<string, string> = {
+    aqua: "bg-aqua/15 text-aqua ring-aqua/25",
+    primary: "bg-primary/15 text-primary ring-primary/25",
+    success: "bg-success/15 text-success ring-success/25",
+    sunset: "bg-sunset/15 text-sunset ring-sunset/25",
+  };
+  return (
+    <div className="flex items-start gap-3 rounded-2xl glass p-4 shadow-soft">
+      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ring-1 ${toneMap[tone]}`}>
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <h3 className="font-display text-sm font-extrabold leading-tight">{title}</h3>
+        <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{body}</p>
+      </div>
     </div>
   );
 }
