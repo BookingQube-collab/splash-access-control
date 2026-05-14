@@ -22,15 +22,23 @@ export const adminUpsertEvent = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({
     id: z.string().uuid().optional(),
     name: z.string().min(1).max(120),
-    event_date: z.string(),
+    start_date: z.string(),
+    end_date: z.string(),
     is_active: z.boolean(),
   }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context.supabase, context.userId);
+    const payload = {
+      name: data.name,
+      event_date: data.start_date,
+      start_date: data.start_date,
+      end_date: data.end_date,
+      is_active: data.is_active,
+    };
     if (data.id) {
-      await context.supabase.from("events").update({ name: data.name, event_date: data.event_date, is_active: data.is_active }).eq("id", data.id);
+      await context.supabase.from("events").update(payload).eq("id", data.id);
     } else {
-      await context.supabase.from("events").insert({ name: data.name, event_date: data.event_date, is_active: data.is_active });
+      await context.supabase.from("events").insert(payload);
     }
     return { ok: true };
   });
@@ -84,6 +92,55 @@ export const adminDeleteSlot = createServerFn({ method: "POST" })
     await assertAdmin(context.supabase, context.userId);
     await context.supabase.from("slots").delete().eq("id", data.id);
     return { ok: true };
+  });
+
+// Bulk-generate recurring slots over the event's date range
+export const adminGenerateSlots = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    event_id: z.string().uuid(),
+    name: z.string().min(1).max(120),
+    start_time: z.string().regex(/^\d{2}:\d{2}$/),
+    end_time: z.string().regex(/^\d{2}:\d{2}$/),
+    capacity: z.number().int().min(1).max(100000),
+    recurrence: z.enum(["once", "daily", "weekly", "monthly"]),
+    weekday: z.number().int().min(0).max(6).optional(), // for weekly
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.supabase, context.userId);
+    const { data: ev } = await context.supabase.from("events").select("start_date, end_date").eq("id", data.event_id).maybeSingle();
+    if (!ev) throw new Error("Event not found");
+    const start = new Date(ev.start_date + "T00:00:00");
+    const end = new Date(ev.end_date + "T00:00:00");
+    const dates: string[] = [];
+    const cursor = new Date(start);
+    let monthAnchorDay = start.getDate();
+    while (cursor <= end) {
+      let include = false;
+      if (data.recurrence === "once") {
+        include = cursor.getTime() === start.getTime();
+      } else if (data.recurrence === "daily") {
+        include = true;
+      } else if (data.recurrence === "weekly") {
+        include = data.weekday != null ? cursor.getDay() === data.weekday : cursor.getDay() === start.getDay();
+      } else if (data.recurrence === "monthly") {
+        include = cursor.getDate() === monthAnchorDay;
+      }
+      if (include) dates.push(cursor.toISOString().slice(0, 10));
+      cursor.setDate(cursor.getDate() + 1);
+      if (data.recurrence === "once") break;
+    }
+    const rows = dates.map((d) => ({
+      event_id: data.event_id,
+      name: data.name,
+      starts_at: new Date(`${d}T${data.start_time}:00`).toISOString(),
+      ends_at: new Date(`${d}T${data.end_time}:00`).toISOString(),
+      capacity: data.capacity,
+    }));
+    if (rows.length === 0) throw new Error("No matching dates in event range");
+    const { error } = await context.supabase.from("slots").insert(rows);
+    if (error) throw new Error(error.message);
+    return { ok: true, count: rows.length };
   });
 
 // ===== Registrations =====

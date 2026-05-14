@@ -38,24 +38,30 @@ export type Database = {
       events: {
         Row: {
           created_at: string
+          end_date: string
           event_date: string
           id: string
           is_active: boolean
           name: string
+          start_date: string
         }
         Insert: {
           created_at?: string
+          end_date?: string
           event_date: string
           id?: string
           is_active?: boolean
           name?: string
+          start_date?: string
         }
         Update: {
           created_at?: string
+          end_date?: string
           event_date?: string
           id?: string
           is_active?: boolean
           name?: string
+          start_date?: string
         }
         Relationships: []
       }

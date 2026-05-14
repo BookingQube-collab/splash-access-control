@@ -8,8 +8,9 @@ import { getPublicEvent, posRegister, searchByMobile } from "@/lib/summersplash.
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Search, User, Phone, Mail, Users, Plus, Ticket, ExternalLink, Sparkles } from "lucide-react";
+import { Search, User, Phone, Mail, Users, Plus, Ticket, ExternalLink, Sparkles, QrCode } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
+import { QrPassModal } from "@/components/qr-pass-modal";
 
 export const Route = createFileRoute("/pos")({
   component: () => (<RoleGuard role="pos" loginPath="/login/pos"><POS /></RoleGuard>),
@@ -27,14 +28,19 @@ function POS() {
   const [searchTerm, setSearchTerm] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [lastToken, setLastToken] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMeta, setModalMeta] = useState<{ name?: string; slot?: string; guests?: number }>({});
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!slotId) return toast.error("Pick a slot");
     try {
       const res = await register({ data: { slot_id: slotId, customer_name: name.trim(), mobile: mobile.trim(), email: email.trim(), guest_count: guests } });
-      toast.success("Registered ✓");
+      const slot = (data?.slots ?? []).find((x) => x.id === slotId);
       setLastToken(res.qr_token);
+      setModalMeta({ name: name.trim(), slot: slot?.name, guests });
+      setModalOpen(true);
+      toast.success("Registered ✓");
       setName(""); setMobile(""); setEmail(""); setGuests(1);
       refetch();
     } catch (e: any) { toast.error(e.message); }
@@ -147,10 +153,22 @@ function POS() {
                       <div className="font-semibold">{r.customer_name}</div>
                       <div className="text-xs text-muted-foreground">{r.mobile} · {r.slots?.name} · {r.guest_count}g · {r.status}</div>
                     </div>
-                    <Link to="/pass/$token" params={{ token: r.qr_token }} target="_blank"
-                      className="inline-flex items-center gap-1 rounded-lg bg-primary/15 px-3 py-1.5 text-xs font-semibold text-primary">
-                      Open <ExternalLink className="h-3 w-3" />
-                    </Link>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => {
+                          setLastToken(r.qr_token);
+                          setModalMeta({ name: r.customer_name, slot: r.slots?.name, guests: r.guest_count });
+                          setModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg bg-aqua/15 px-3 py-1.5 text-xs font-semibold text-aqua hover:bg-aqua/25"
+                      >
+                        <QrCode className="h-3 w-3" /> Reprint
+                      </button>
+                      <Link to="/pass/$token" params={{ token: r.qr_token }} target="_blank"
+                        className="inline-flex items-center gap-1 rounded-lg bg-primary/15 px-3 py-1.5 text-xs font-semibold text-primary">
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    </div>
                   </motion.div>
                 ))}
               </AnimatePresence>
@@ -166,16 +184,31 @@ function POS() {
                   <Ticket className="h-5 w-5 text-aqua" />
                   <h3 className="font-display text-lg font-bold">Last pass ready</h3>
                 </div>
-                <p className="text-sm text-muted-foreground">Show or print the QR pass for the customer.</p>
-                <Link to="/pass/$token" params={{ token: lastToken }} target="_blank"
-                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-sunset px-5 py-3 text-sm font-semibold text-foreground shadow-glow-sunset">
-                  Open pass <ExternalLink className="h-4 w-4" />
-                </Link>
+                <p className="text-sm text-muted-foreground">Reopen the QR for printing or send the customer to the full pass page.</p>
+                <div className="mt-4 flex gap-2">
+                  <button onClick={() => setModalOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-sunset px-5 py-3 text-sm font-semibold text-foreground shadow-glow-sunset">
+                    <QrCode className="h-4 w-4" /> Show QR
+                  </button>
+                  <Link to="/pass/$token" params={{ token: lastToken }} target="_blank"
+                    className="inline-flex items-center gap-2 rounded-xl glass px-5 py-3 text-sm font-semibold hover-glow">
+                    Open pass <ExternalLink className="h-4 w-4" />
+                  </Link>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
       </div>
+
+      <QrPassModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        token={lastToken}
+        customerName={modalMeta.name}
+        slotName={modalMeta.slot}
+        guests={modalMeta.guests}
+      />
     </div>
   );
 }
