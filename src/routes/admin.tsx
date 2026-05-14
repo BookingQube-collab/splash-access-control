@@ -374,16 +374,36 @@ function StatusPill({ status }: { status: string }) {
 
 function DashTab() {
   const fn = useServerFn(getDashboardCounts);
-  const { data } = useQuery({ queryKey: ["a-dash"], queryFn: () => fn(), refetchInterval: 5000 });
+  const [eventId, setEventId] = useState<string>("");
+  const { data } = useQuery({
+    queryKey: ["a-dash", eventId],
+    queryFn: () => fn({ data: eventId ? { eventId } : {} }),
+    refetchInterval: 5000,
+  });
+  const events = (data as any)?.events ?? [];
   const slots = data?.slots ?? [];
   const totals = slots.reduce(
-    (a, s) => ({
-      cap: a.cap + s.capacity, inside: a.inside + s.entered, active: a.active + s.active, invalid: a.invalid + s.invalid,
+    (a: any, s: any) => ({
+      cap: a.cap + (s.total_capacity ?? s.capacity * (s.event_days ?? 1)),
+      inside: a.inside + s.entered, active: a.active + s.active, invalid: a.invalid + s.invalid,
     }), { cap: 0, inside: 0, active: 0, invalid: 0 });
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Event</label>
+        <select
+          value={eventId}
+          onChange={(e) => setEventId(e.target.value)}
+          className="rounded-xl border border-foreground/10 bg-background/40 px-3 py-2 text-sm outline-none focus:border-primary/40"
+        >
+          <option value="">Active (today)</option>
+          {events.map((e: any) => (
+            <option key={e.id} value={e.id}>{e.name} · {e.days}d ({e.start_date} → {e.end_date})</option>
+          ))}
+        </select>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Capacity" value={totals.cap} hue="bg-primary/15 text-primary" />
+        <Stat label="Capacity (total)" value={totals.cap} hue="bg-primary/15 text-primary" />
         <Stat label="Inside now" value={totals.inside} hue="bg-success/15 text-success" pulse />
         <Stat label="Active passes" value={totals.active} hue="bg-aqua/15 text-aqua" />
         <Stat label="Invalid scans" value={totals.invalid} hue="bg-destructive/15 text-destructive" />
@@ -396,7 +416,10 @@ function DashTab() {
               <motion.div key={s.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl glass p-4 hover-glow">
                 <div className="flex items-baseline justify-between">
                   <div className="font-display font-semibold">{s.name}</div>
-                  <div className="text-xs text-muted-foreground">{s.remaining}/{s.capacity}</div>
+                  <div className="text-right text-xs text-muted-foreground">
+                    <div>{s.remaining}/{s.capacity} <span className="opacity-60">today</span></div>
+                    <div className="text-[10px] opacity-70">Total {s.total_capacity ?? s.capacity} ({s.event_days ?? 1}d)</div>
+                  </div>
                 </div>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-foreground/10">
                   <motion.div initial={{ width: 0 }} animate={{ width: `${occ}%` }} transition={{ duration: 0.6 }}
