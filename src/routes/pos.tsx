@@ -184,6 +184,34 @@ function POS() {
         </div>
       </header>
 
+      {/* Header (compact, premium) */}
+      <header className="relative z-30 shrink-0 border-b border-foreground/5 bg-background/50 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between gap-3 px-4 py-2.5">
+          <div className="flex items-center gap-3">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-aqua/30 to-primary/20 text-aqua shadow-glow-aqua ring-1 ring-aqua/30">
+              <Ticket className="h-4 w-4" />
+            </span>
+            <div className="leading-tight">
+              <p className="text-[9px] font-bold uppercase tracking-[0.35em] text-aqua/80">Counter · POS</p>
+              <h1 className="font-display text-lg font-extrabold">Point of Sale</h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full glass px-2.5 py-1 text-[10px] font-semibold">
+              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" /> Live
+            </span>
+            <button
+              type="button" onClick={toggleFullscreen}
+              title={isFs ? "Exit fullscreen" : "Fullscreen"}
+              className="inline-flex items-center gap-1.5 rounded-full bg-foreground/10 px-3 py-1.5 text-[11px] font-bold text-foreground/80 ring-1 ring-foreground/10 transition hover:bg-aqua/15 hover:text-aqua hover:ring-aqua/30"
+            >
+              {isFs ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">{isFs ? "Exit" : "Fullscreen"}</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
       <main className="relative z-10 mx-auto w-full max-w-[1400px] flex-1 px-3 py-3 sm:px-4">
         <div className="grid h-full gap-3 lg:grid-cols-12">
           {/* === LEFT column: slots + customer === */}
