@@ -402,8 +402,9 @@ function DashTab() {
                   <motion.div initial={{ width: 0 }} animate={{ width: `${occ}%` }} transition={{ duration: 0.6 }}
                     className={`h-full rounded-full ${occ > 85 ? "bg-coral" : "bg-gradient-to-r from-aqua to-primary"}`} />
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-muted-foreground">
-                  <span>Inside <b className="text-foreground"><AnimatedCount value={s.entered} /></b></span>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
+                  <span className="rounded-md bg-sunset/10 px-2 py-1 text-sunset">Booked <b className="ml-1 text-foreground"><AnimatedCount value={s.booked ?? 0} /></b></span>
+                  <span className="rounded-md bg-success/10 px-2 py-1 text-success">Inside <b className="ml-1 text-foreground"><AnimatedCount value={s.entered} /></b></span>
                   <span>Active <b className="text-foreground"><AnimatedCount value={s.active} /></b></span>
                   <span>Exited <b className="text-foreground"><AnimatedCount value={s.exited} /></b></span>
                 </div>
