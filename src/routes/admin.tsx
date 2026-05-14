@@ -198,7 +198,7 @@ function EventsTab() {
   );
 }
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 
 function SlotsTab() {
   const listE = useServerFn(adminListEvents); const list = useServerFn(adminListSlots);
