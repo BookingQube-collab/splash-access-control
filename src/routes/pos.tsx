@@ -20,7 +20,7 @@ function POS() {
   const fetchEvent = useServerFn(getPublicEvent);
   const register = useServerFn(posRegister);
   const search = useServerFn(searchByMobile);
-  const { data, refetch } = useQuery({ queryKey: ["pos-event"], queryFn: () => fetchEvent(), refetchInterval: 10000 });
+  const { data, refetch } = useQuery({ queryKey: ["pos-event"], queryFn: () => fetchEvent(), refetchInterval: 5000, refetchOnWindowFocus: true });
 
   const [slotId, setSlotId] = useState("");
   const [name, setName] = useState(""); const [mobile, setMobile] = useState("");

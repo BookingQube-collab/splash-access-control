@@ -26,7 +26,7 @@ function RegisterPage() {
   const navigate = useNavigate();
   const fetchEvent = useServerFn(getPublicEvent);
   const register = useServerFn(publicRegister);
-  const { data, isLoading, refetch } = useQuery({ queryKey: ["public-event"], queryFn: () => fetchEvent() });
+  const { data, isLoading, refetch } = useQuery({ queryKey: ["public-event"], queryFn: () => fetchEvent(), refetchInterval: 5000, refetchOnWindowFocus: true });
 
   const [slotId, setSlotId] = useState("");
   const [name, setName] = useState("");
