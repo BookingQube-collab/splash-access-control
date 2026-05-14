@@ -152,25 +152,37 @@ export const getPass = createServerFn({ method: "GET" })
 // ============ STAFF: dashboard counts ============
 export const getDashboardCounts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((d: unknown) => z.object({ eventId: z.string().uuid().optional() }).parse(d ?? {}))
+  .handler(async ({ data, context }) => {
     const { supabase } = context;
     const today = new Date().toISOString().slice(0, 10);
-    // active event covering today, or fallback to most recent active
-    let { data: events } = await supabase
-      .from("events").select("*")
-      .eq("is_active", true)
-      .lte("start_date", today)
-      .gte("end_date", today);
-    if (!events || events.length === 0) {
-      const { data: fb } = await supabase
-        .from("events").select("*")
-        .eq("is_active", true)
-        .order("event_date", { ascending: false })
-        .limit(1);
-      events = fb ?? [];
+    // All active events (for filter dropdown)
+    const { data: allEvents } = await supabase
+      .from("events").select("*").eq("is_active", true).order("start_date", { ascending: false });
+    const allEventList = allEvents ?? [];
+
+    let evs: any[] = [];
+    if (data.eventId) {
+      evs = allEventList.filter((e) => e.id === data.eventId);
+    } else {
+      // Default: events covering today, fallback to most recent
+      evs = allEventList.filter((e) => e.start_date <= today && e.end_date >= today);
+      if (evs.length === 0 && allEventList.length > 0) evs = [allEventList[0]];
     }
-    const evs = events ?? [];
-    if (evs.length === 0) return { slots: [] };
+
+    const eventDaysById: Record<string, number> = {};
+    for (const e of allEventList) {
+      const start = new Date(e.start_date);
+      const end = new Date(e.end_date);
+      const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+      eventDaysById[e.id] = days;
+    }
+
+    const eventsOut = allEventList.map((e) => ({
+      id: e.id, name: e.name, start_date: e.start_date, end_date: e.end_date, days: eventDaysById[e.id],
+    }));
+
+    if (evs.length === 0) return { events: eventsOut, slots: [], selectedEventId: data.eventId ?? null };
     const eventIds = evs.map((e) => e.id);
     const { data: slots } = await supabase.from("slots").select("*").in("event_id", eventIds).order("starts_at");
     const result = await Promise.all(
@@ -189,12 +201,16 @@ export const getDashboardCounts = createServerFn({ method: "GET" })
         const auto_exited = sumG(autoExitedRows);
         const used = active + entered;
         const booked = active + entered + exited + auto_exited;
+        const eventDays = eventDaysById[s.event_id] ?? 1;
         return {
           id: s.id,
           name: s.name,
           starts_at: s.starts_at,
           ends_at: s.ends_at,
           capacity: s.capacity,
+          event_id: s.event_id,
+          event_days: eventDays,
+          total_capacity: s.capacity * eventDays,
           active,
           entered,
           exited,
@@ -205,7 +221,7 @@ export const getDashboardCounts = createServerFn({ method: "GET" })
         };
       })
     );
-    return { slots: result };
+    return { events: eventsOut, slots: result, selectedEventId: data.eventId ?? evs[0]?.id ?? null };
   });
 
 // ============ SCANNER ============
