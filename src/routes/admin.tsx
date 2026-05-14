@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { RoleGuard } from "@/components/role-guard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -214,12 +214,16 @@ function UsersTab() {
 function SettingsTab() {
   const get = useServerFn(adminGetSettings); const save = useServerFn(adminSaveSettings);
   const { data, refetch } = useQuery({ queryKey: ["a-settings"], queryFn: () => get() });
-  const [key, setKey] = useState(""); const [enabled, setEnabled] = useState(false);
-  const loaded = !!data?.settings;
-  if (loaded && key === "" && data!.settings!.scandit_api_key) setKey(data!.settings!.scandit_api_key);
-  if (loaded && data!.settings!.scandit_enabled !== enabled && key === (data!.settings!.scandit_api_key || "")) {
-    // initial sync
-  }
+  const [key, setKey] = useState("");
+  const [enabled, setEnabled] = useState(false);
+  const [synced, setSynced] = useState(false);
+  useEffect(() => {
+    if (data?.settings && !synced) {
+      setKey(data.settings.scandit_api_key ?? "");
+      setEnabled(!!data.settings.scandit_enabled);
+      setSynced(true);
+    }
+  }, [data, synced]);
   return (
     <Card><CardHeader><CardTitle>Scanner Settings</CardTitle></CardHeader><CardContent className="space-y-4 max-w-xl">
       <div>
@@ -228,9 +232,9 @@ function SettingsTab() {
       </div>
       <div className="flex items-center justify-between rounded-lg border p-3">
         <div><div className="font-medium">Enable Scandit scanning</div><div className="text-xs text-muted-foreground">When off, scanner falls back to browser camera.</div></div>
-        <Switch checked={data?.settings?.scandit_enabled ?? enabled} onCheckedChange={(v) => setEnabled(v)} />
+        <Switch checked={enabled} onCheckedChange={setEnabled} />
       </div>
-      <Button onClick={async () => { await save({ data: { scandit_api_key: key || null, scandit_enabled: enabled || (data?.settings?.scandit_enabled ?? false) } }); toast.success("Saved"); refetch(); }}>Save settings</Button>
+      <Button onClick={async () => { await save({ data: { scandit_api_key: key || null, scandit_enabled: enabled } }); toast.success("Saved"); refetch(); }}>Save settings</Button>
     </CardContent></Card>
   );
 }
