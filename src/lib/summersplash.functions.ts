@@ -317,3 +317,34 @@ export const searchByMobile = createServerFn({ method: "POST" })
       .limit(20);
     return { results: regs ?? [] };
   });
+
+// ============ PUBLIC: list all passes by mobile number ============
+export const getMyPasses = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => z.object({ mobile: z.string().trim().min(7).max(20) }).parse(d))
+  .handler(async ({ data }) => {
+    const { data: regs } = await supabaseAdmin
+      .from("registrations")
+      .select("id, customer_name, mobile, email, guest_count, qr_token, status, created_at, entered_at, exited_at, slots(name, starts_at, ends_at, events(name, event_date))")
+      .eq("mobile", data.mobile)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    const now = Date.now();
+    const list = (regs ?? []).map((r: any) => {
+      const slot = r.slots ?? {};
+      const ended = slot.ends_at ? new Date(slot.ends_at).getTime() < now : false;
+      const liveStatus =
+        r.status === "exited" || r.status === "auto_exited" ? "Exited" :
+        r.status === "expired" ? "Expired" :
+        r.status === "entered" ? "Inside" :
+        ended ? "Expired" : "Active";
+      const isActive = liveStatus === "Active" || liveStatus === "Inside";
+      return {
+        id: r.id, qr_token: r.qr_token, customer_name: r.customer_name, mobile: r.mobile,
+        guest_count: r.guest_count, status: r.status, liveStatus, isActive,
+        created_at: r.created_at, entered_at: r.entered_at, exited_at: r.exited_at,
+        slot_name: slot.name ?? null, slot_starts_at: slot.starts_at ?? null, slot_ends_at: slot.ends_at ?? null,
+        event_name: slot.events?.name ?? null, event_date: slot.events?.event_date ?? null,
+      };
+    });
+    return { passes: list };
+  });
