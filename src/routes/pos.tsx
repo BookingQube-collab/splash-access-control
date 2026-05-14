@@ -558,15 +558,42 @@ function POS() {
 
 // ---------- Small UI primitives ----------
 
-function Section({ icon, title, trailing, children }: {
-  icon: React.ReactNode; title: string; trailing?: React.ReactNode; children: React.ReactNode;
+const SLOT_PALETTE = [
+  { Icon: Car,   ring: "ring-aqua",     glow: "shadow-glow-aqua",
+    iconBg: "bg-aqua/15 text-aqua ring-aqua/30",
+    checkBg: "bg-aqua",     bar: "from-aqua to-primary" },
+  { Icon: User,  ring: "ring-primary",  glow: "shadow-[0_0_30px_-6px_rgba(96,165,250,0.6)]",
+    iconBg: "bg-primary/15 text-primary ring-primary/30",
+    checkBg: "bg-primary",  bar: "from-primary to-aqua" },
+  { Icon: Star,  ring: "ring-[#a78bfa]", glow: "shadow-[0_0_30px_-6px_rgba(167,139,250,0.6)]",
+    iconBg: "bg-[#a78bfa]/15 text-[#a78bfa] ring-[#a78bfa]/30",
+    checkBg: "bg-[#a78bfa]", bar: "from-[#a78bfa] to-[#c084fc]" },
+  { Icon: Crown, ring: "ring-sunset",   glow: "shadow-glow-sunset",
+    iconBg: "bg-sunset/15 text-sunset ring-sunset/30",
+    checkBg: "bg-sunset",   bar: "from-sunset to-coral" },
+  { Icon: Anchor,ring: "ring-success",  glow: "shadow-[0_0_30px_-6px_rgba(74,222,128,0.55)]",
+    iconBg: "bg-success/15 text-success ring-success/30",
+    checkBg: "bg-success",  bar: "from-success to-aqua" },
+  { Icon: Sun,   ring: "ring-coral",    glow: "shadow-[0_0_30px_-6px_rgba(255,107,107,0.55)]",
+    iconBg: "bg-coral/15 text-coral ring-coral/30",
+    checkBg: "bg-coral",    bar: "from-coral to-sunset" },
+];
+
+function Section({ icon, step, title, trailing, children }: {
+  icon?: React.ReactNode; step?: number; title: string; trailing?: React.ReactNode; children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl glass-strong p-3.5 shadow-soft sm:p-4">
-      <div className="mb-2.5 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="grid h-7 w-7 place-items-center rounded-lg bg-aqua/15 text-aqua">{icon}</div>
-          <h2 className="font-display text-sm font-bold">{title}</h2>
+    <section className="rounded-2xl glass-strong p-4 shadow-soft sm:p-5">
+      <div className="mb-3.5 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          {step !== undefined ? (
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-aqua/15 font-display text-xs font-extrabold text-aqua ring-1 ring-aqua/30">
+              {step}
+            </span>
+          ) : (
+            <div className="grid h-7 w-7 place-items-center rounded-lg bg-aqua/15 text-aqua">{icon}</div>
+          )}
+          <h2 className="font-display text-base font-bold">{title}</h2>
         </div>
         {trailing}
       </div>
