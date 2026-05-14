@@ -386,7 +386,7 @@ function POS() {
 
             <button
               type="button" onClick={onReview} disabled={blocked}
-              className="group relative inline-flex h-14 w-full shrink-0 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset text-base font-bold text-foreground shadow-glow-sunset transition disabled:cursor-not-allowed disabled:opacity-50"
+              className="group relative inline-flex h-16 w-full shrink-0 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset text-base font-bold text-foreground shadow-glow-sunset transition disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Sparkles className="h-5 w-5" />
               <span>{blocked ? blockReason : "Review & Confirm"}</span>
@@ -425,7 +425,26 @@ function POS() {
             )}
           </div>
         </div>
+
+        {/* === Trust / feature row === */}
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <TrustCard icon={<ShieldCheck className="h-5 w-5" />} tone="aqua"
+            title="Secure & Reliable" body="Your data is encrypted and transactions are secure." />
+          <TrustCard icon={<Timer className="h-5 w-5" />} tone="primary"
+            title="Fast Check-in" body="Quick scanning and auto guest lookup." />
+          <TrustCard icon={<BarChart3 className="h-5 w-5" />} tone="success"
+            title="Real-time Updates" body="Live capacity and slot availability." />
+          <TrustCard icon={<Headphones className="h-5 w-5" />} tone="sunset"
+            title="Support" body="Need help? Our support team is here for you." />
+        </div>
       </main>
+
+      <footer className="relative z-10 mt-3 border-t border-foreground/5 bg-background/40 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-[1400px] flex-wrap items-center justify-between gap-2 px-4 py-3 text-[11px] text-muted-foreground">
+          <span>© {new Date().getFullYear()} SummerSplash. All rights reserved.</span>
+          <span className="tabular-nums">v1.0.0</span>
+        </div>
+      </footer>
 
       {/* === Barcode/QR scan modal === */}
       <Dialog open={scanOpen} onOpenChange={setScanOpen}>
