@@ -168,7 +168,7 @@ export const adminGetSettings = createServerFn({ method: "GET" })
 export const adminSaveSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({
-    scandit_api_key: z.string().max(500).optional().nullable(),
+    scandit_api_key: z.string().max(5000).optional().nullable(),
     scandit_enabled: z.boolean(),
   }).parse(d))
   .handler(async ({ data, context }) => {
