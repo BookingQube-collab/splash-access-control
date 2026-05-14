@@ -23,7 +23,7 @@ export const Route = createFileRoute("/pos")({
 });
 
 type Registration = {
-  id: string; customer_name: string; mobile: string; guest_count: number;
+  id: string; customer_name: string; mobile: string; email?: string | null; guest_count: number;
   qr_token: string; status: string; created_at: string;
   slots?: { name: string; starts_at: string } | null;
 };
