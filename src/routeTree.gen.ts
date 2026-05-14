@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LoginScannerRouteImport } from './routes/login.scanner'
 import { Route as LoginPosRouteImport } from './routes/login.pos'
 import { Route as LoginDashboardRouteImport } from './routes/login.dashboard'
 import { Route as LoginAdminRouteImport } from './routes/login.admin'
@@ -17,6 +18,11 @@ import { Route as LoginAdminRouteImport } from './routes/login.admin'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginScannerRoute = LoginScannerRouteImport.update({
+  id: '/login/scanner',
+  path: '/login/scanner',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginPosRoute = LoginPosRouteImport.update({
@@ -40,12 +46,14 @@ export interface FileRoutesByFullPath {
   '/login/admin': typeof LoginAdminRoute
   '/login/dashboard': typeof LoginDashboardRoute
   '/login/pos': typeof LoginPosRoute
+  '/login/scanner': typeof LoginScannerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login/admin': typeof LoginAdminRoute
   '/login/dashboard': typeof LoginDashboardRoute
   '/login/pos': typeof LoginPosRoute
+  '/login/scanner': typeof LoginScannerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,30 @@ export interface FileRoutesById {
   '/login/admin': typeof LoginAdminRoute
   '/login/dashboard': typeof LoginDashboardRoute
   '/login/pos': typeof LoginPosRoute
+  '/login/scanner': typeof LoginScannerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login/admin' | '/login/dashboard' | '/login/pos'
+  fullPaths:
+    | '/'
+    | '/login/admin'
+    | '/login/dashboard'
+    | '/login/pos'
+    | '/login/scanner'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login/admin' | '/login/dashboard' | '/login/pos'
-  id: '__root__' | '/' | '/login/admin' | '/login/dashboard' | '/login/pos'
+  to:
+    | '/'
+    | '/login/admin'
+    | '/login/dashboard'
+    | '/login/pos'
+    | '/login/scanner'
+  id:
+    | '__root__'
+    | '/'
+    | '/login/admin'
+    | '/login/dashboard'
+    | '/login/pos'
+    | '/login/scanner'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +92,7 @@ export interface RootRouteChildren {
   LoginAdminRoute: typeof LoginAdminRoute
   LoginDashboardRoute: typeof LoginDashboardRoute
   LoginPosRoute: typeof LoginPosRoute
+  LoginScannerRoute: typeof LoginScannerRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -76,6 +102,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login/scanner': {
+      id: '/login/scanner'
+      path: '/login/scanner'
+      fullPath: '/login/scanner'
+      preLoaderRoute: typeof LoginScannerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login/pos': {
@@ -107,6 +140,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginAdminRoute: LoginAdminRoute,
   LoginDashboardRoute: LoginDashboardRoute,
   LoginPosRoute: LoginPosRoute,
+  LoginScannerRoute: LoginScannerRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
