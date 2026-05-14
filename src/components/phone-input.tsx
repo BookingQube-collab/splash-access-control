@@ -11,14 +11,20 @@ type Props = {
   required?: boolean;
   autoFocus?: boolean;
   id?: string;
+  /** Visual variant: 'soft' (POS bg-foreground/5) or 'outline' (default border) */
+  variant?: "soft" | "outline";
 };
 
 export function IntlPhoneInput({
   value, onChange, placeholder = "Mobile number", className,
-  defaultCountry = "IN", required, autoFocus, id,
+  defaultCountry = "IN", required, autoFocus, id, variant = "soft",
 }: Props) {
+  const shell =
+    variant === "soft"
+      ? "h-11 rounded-md bg-foreground/5 px-3"
+      : "h-11 rounded-md border border-input bg-background px-3";
   return (
-    <div className={cn("intl-phone-wrap", className)}>
+    <div className={cn("intl-phone-wrap flex items-center", shell, className)}>
       <PhoneInput
         id={id}
         international
@@ -29,7 +35,7 @@ export function IntlPhoneInput({
         required={required}
         autoFocus={autoFocus}
         countryCallingCodeEditable={false}
-        className="flex h-11 items-center gap-2 rounded-md border border-input bg-background px-3"
+        className="flex h-full w-full items-center"
       />
     </div>
   );
