@@ -13,6 +13,7 @@ import {
   Search, User, Phone, Mail, Users, Ticket, ExternalLink, Sparkles,
   QrCode, ArrowRight, CheckCircle2, Edit3, X, History, Zap, ScanLine, Camera,
   Maximize2, Minimize2, Waves, LogOut, ShieldCheck, Timer, BarChart3, Headphones,
+  Car, Star, Calendar, Crown, Anchor, Sun,
 } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
 import { QrPassModal } from "@/components/qr-pass-modal";
