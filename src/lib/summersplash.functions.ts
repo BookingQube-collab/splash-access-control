@@ -261,9 +261,21 @@ export const posRegister = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: slot } = await context.supabase.from("slots").select("*").eq("id", data.slot_id).maybeSingle();
     if (!slot) throw new Error("Slot not found");
-    const { count } = await context.supabase
-      .from("registrations").select("*", { count: "exact", head: true }).eq("slot_id", data.slot_id).in("status", ["active", "entered"]);
-    if ((count ?? 0) + data.guest_count > slot.capacity) throw new Error("Slot is full");
+    // dedup: same slot + mobile within last 30s — return existing
+    const since = new Date(Date.now() - 30_000).toISOString();
+    const { data: dupe } = await context.supabase
+      .from("registrations")
+      .select("id, qr_token")
+      .eq("slot_id", data.slot_id)
+      .eq("mobile", data.mobile)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (dupe) return { id: dupe.id, qr_token: dupe.qr_token };
+
+    const used = await sumGuests(context.supabase, data.slot_id);
+    if (used + data.guest_count > slot.capacity) throw new Error("Slot is full");
 
     const { data: reg, error } = await context.supabase.from("registrations").insert({
       slot_id: data.slot_id,
