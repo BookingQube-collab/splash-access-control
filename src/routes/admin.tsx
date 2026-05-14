@@ -374,11 +374,18 @@ function StatusPill({ status }: { status: string }) {
 
 function DashTab() {
   const fn = useServerFn(getDashboardCounts);
-  const { data } = useQuery({ queryKey: ["a-dash"], queryFn: () => fn(), refetchInterval: 5000 });
+  const [eventId, setEventId] = useState<string>("");
+  const { data } = useQuery({
+    queryKey: ["a-dash", eventId],
+    queryFn: () => fn({ data: eventId ? { eventId } : {} }),
+    refetchInterval: 5000,
+  });
+  const events = (data as any)?.events ?? [];
   const slots = data?.slots ?? [];
   const totals = slots.reduce(
-    (a, s) => ({
-      cap: a.cap + s.capacity, inside: a.inside + s.entered, active: a.active + s.active, invalid: a.invalid + s.invalid,
+    (a: any, s: any) => ({
+      cap: a.cap + (s.total_capacity ?? s.capacity * (s.event_days ?? 1)),
+      inside: a.inside + s.entered, active: a.active + s.active, invalid: a.invalid + s.invalid,
     }), { cap: 0, inside: 0, active: 0, invalid: 0 });
   return (
     <div className="space-y-6">
