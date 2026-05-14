@@ -4,7 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RoleGuard } from "@/components/role-guard";
-import { getPublicEvent, posRegister, searchByMobile } from "@/lib/summersplash.functions";
+import { getPublicEvent, posRegister, searchByMobile, lookupByToken } from "@/lib/summersplash.functions";
+import { IntlPhoneInput } from "@/components/phone-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -36,6 +37,7 @@ function POS() {
   const fetchEvent = useServerFn(getPublicEvent);
   const register = useServerFn(posRegister);
   const search = useServerFn(searchByMobile);
+  const lookupToken = useServerFn(lookupByToken);
   const { signOut } = useAuth();
   const navigate = useNavigate();
   const { data, refetch } = useQuery({
