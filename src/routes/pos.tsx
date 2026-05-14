@@ -8,8 +8,9 @@ import { getPublicEvent, posRegister, searchByMobile } from "@/lib/summersplash.
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Search, User, Phone, Mail, Users, Plus, Ticket, ExternalLink, Sparkles } from "lucide-react";
+import { Search, User, Phone, Mail, Users, Plus, Ticket, ExternalLink, Sparkles, QrCode } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
+import { QrPassModal } from "@/components/qr-pass-modal";
 
 export const Route = createFileRoute("/pos")({
   component: () => (<RoleGuard role="pos" loginPath="/login/pos"><POS /></RoleGuard>),
