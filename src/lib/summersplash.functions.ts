@@ -6,26 +6,28 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 // ============ PUBLIC: list current event + slots with remaining capacity ============
 export const getPublicEvent = createServerFn({ method: "GET" }).handler(async () => {
   const today = new Date().toISOString().slice(0, 10);
-  const { data: event } = await supabaseAdmin
+  // 1) prefer an active event whose date range covers today
+  const { data: live } = await supabaseAdmin
     .from("events")
     .select("*")
     .eq("is_active", true)
-    .eq("event_date", today)
+    .lte("start_date", today)
+    .gte("end_date", today)
+    .order("start_date", { ascending: false })
+    .limit(1)
     .maybeSingle();
+  if (live) return loadSlots(live);
 
-  if (!event) {
-    // fallback: most recent active
-    const { data: fallback } = await supabaseAdmin
-      .from("events")
-      .select("*")
-      .eq("is_active", true)
-      .order("event_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!fallback) return { event: null, slots: [] };
-    return loadSlots(fallback);
-  }
-  return loadSlots(event);
+  // 2) fallback: most recent active event (upcoming or past)
+  const { data: fallback } = await supabaseAdmin
+    .from("events")
+    .select("*")
+    .eq("is_active", true)
+    .order("event_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!fallback) return { event: null, slots: [] };
+  return loadSlots(fallback);
 });
 
 async function loadSlots(event: { id: string; name: string; event_date: string }) {
