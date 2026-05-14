@@ -93,11 +93,10 @@ function MyPassesPage() {
                 <Label className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
                   <Phone className="h-3.5 w-3.5" /> Mobile number
                 </Label>
-                <Input
-                  inputMode="tel" autoComplete="tel" value={mobile}
-                  onChange={(e) => setMobile(e.target.value)}
+                <IntlPhoneInput
+                  value={mobile} onChange={setMobile}
                   placeholder="e.g. 9876543210"
-                  className="h-14 border-0 bg-foreground/5 text-lg tracking-wide"
+                  className="h-14"
                   autoFocus
                 />
                 <button
