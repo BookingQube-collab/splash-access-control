@@ -28,14 +28,19 @@ function POS() {
   const [searchTerm, setSearchTerm] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [lastToken, setLastToken] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMeta, setModalMeta] = useState<{ name?: string; slot?: string; guests?: number }>({});
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!slotId) return toast.error("Pick a slot");
     try {
       const res = await register({ data: { slot_id: slotId, customer_name: name.trim(), mobile: mobile.trim(), email: email.trim(), guest_count: guests } });
-      toast.success("Registered ✓");
+      const slot = (data?.slots ?? []).find((x) => x.id === slotId);
       setLastToken(res.qr_token);
+      setModalMeta({ name: name.trim(), slot: slot?.name, guests });
+      setModalOpen(true);
+      toast.success("Registered ✓");
       setName(""); setMobile(""); setEmail(""); setGuests(1);
       refetch();
     } catch (e: any) { toast.error(e.message); }
