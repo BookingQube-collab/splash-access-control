@@ -5,11 +5,12 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { getPublicEvent, publicRegister } from "@/lib/summersplash.functions";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Waves, ArrowLeft, Users, Mail, Phone, User, ChevronRight, Check } from "lucide-react";
+import { Waves, ArrowLeft, Users, Mail, Phone, User, ChevronRight, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { BeachBg } from "@/components/beach-bg";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/register")({
   head: () => ({
