@@ -37,15 +37,26 @@ async function loadSlots(event: { id: string; name: string; event_date: string }
 
   const result = await Promise.all(
     (slots ?? []).map(async (s) => {
-      const { count } = await supabaseAdmin
+      const { data: regs } = await supabaseAdmin
         .from("registrations")
-        .select("*", { count: "exact", head: true })
+        .select("guest_count")
         .eq("slot_id", s.id)
         .in("status", ["active", "entered"]);
-      return { ...s, registered: count ?? 0, remaining: s.capacity - (count ?? 0) };
+      const used = (regs ?? []).reduce((sum, r: any) => sum + (r.guest_count ?? 1), 0);
+      return { ...s, registered: used, remaining: Math.max(0, s.capacity - used) };
     })
   );
   return { event, slots: result };
+}
+
+// Sum of guest_count for a slot in active/entered status
+async function sumGuests(client: any, slotId: string) {
+  const { data } = await client
+    .from("registrations")
+    .select("guest_count")
+    .eq("slot_id", slotId)
+    .in("status", ["active", "entered"]);
+  return (data ?? []).reduce((sum: number, r: any) => sum + (r.guest_count ?? 1), 0);
 }
 
 // ============ PUBLIC: register a customer ============
