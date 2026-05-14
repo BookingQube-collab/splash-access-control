@@ -142,13 +142,18 @@ function DashboardPage() {
                 </div>
 
                 <div className="mt-5 grid grid-cols-3 gap-2 text-xs">
+                  <Mini label="Booked" value={s.booked ?? 0} accent />
                   <Mini label="Active" value={s.active} />
                   <Mini label="Exited" value={s.exited} />
                   <Mini label="Auto-exit" value={s.auto_exited} />
-                  <Mini label="Remaining" value={s.remaining} accent />
+                  <Mini label="Remaining" value={s.remaining} />
                   <Mini label="Capacity" value={s.capacity} />
-                  <Mini label="Invalid" value={s.invalid} danger />
                 </div>
+                {s.invalid > 0 && (
+                  <div className="mt-2">
+                    <Mini label="Invalid scans" value={s.invalid} danger />
+                  </div>
+                )}
               </motion.div>
             );
           })}
