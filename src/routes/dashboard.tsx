@@ -6,8 +6,9 @@ import { useEffect, useState } from "react";
 import { RoleGuard } from "@/components/role-guard";
 import { getDashboardCounts } from "@/lib/summersplash.functions";
 import { format } from "date-fns";
-import { Activity, Users, LogIn, LogOut, AlertTriangle, Clock, TrendingUp } from "lucide-react";
+import { Activity, Users, LogIn, LogOut, AlertTriangle, Clock, TrendingUp, Ticket } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
 
 export const Route = createFileRoute("/dashboard")({
   component: () => (
