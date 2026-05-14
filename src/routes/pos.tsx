@@ -685,12 +685,13 @@ function GuestStepper({ guests, setGuests, maxAllowed }: { guests: number; setGu
         </motion.button>
       </div>
       {presets.length > 0 && (
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           {presets.map((n) => (
             <button key={n} type="button" onClick={() => setG(n)}
-              className={`h-10 min-w-[52px] rounded-xl px-3 text-sm font-bold tabular-nums transition ${
-                guests === n ? "bg-aqua text-primary-foreground shadow-glow-aqua" :
-                "bg-foreground/5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+              className={`grid h-11 w-11 place-items-center rounded-full font-display text-sm font-extrabold tabular-nums ring-1 transition ${
+                guests === n
+                  ? "bg-aqua text-primary-foreground ring-aqua shadow-glow-aqua"
+                  : "bg-foreground/5 text-foreground/70 ring-foreground/10 hover:bg-foreground/10 hover:text-foreground"
               }`}>
               {n}
             </button>
