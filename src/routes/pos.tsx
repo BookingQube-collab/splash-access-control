@@ -580,6 +580,28 @@ function FullBanner({ children }: { children: React.ReactNode }) {
   );
 }
 
+function TrustCard({ icon, tone, title, body }: {
+  icon: React.ReactNode; tone: "aqua" | "primary" | "success" | "sunset"; title: string; body: string;
+}) {
+  const toneMap: Record<string, string> = {
+    aqua: "bg-aqua/15 text-aqua ring-aqua/25",
+    primary: "bg-primary/15 text-primary ring-primary/25",
+    success: "bg-success/15 text-success ring-success/25",
+    sunset: "bg-sunset/15 text-sunset ring-sunset/25",
+  };
+  return (
+    <div className="flex items-start gap-3 rounded-2xl glass p-4 shadow-soft">
+      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ring-1 ${toneMap[tone]}`}>
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <h3 className="font-display text-sm font-extrabold leading-tight">{title}</h3>
+        <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{body}</p>
+      </div>
+    </div>
+  );
+}
+
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-foreground/5 pb-2.5 last:border-0 last:pb-0">
