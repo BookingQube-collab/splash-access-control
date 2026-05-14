@@ -298,23 +298,38 @@ function POS() {
 
             <Section step={2} title="Customer">
               <div className="space-y-2.5">
+                {/* Scan barcode / QR — separate field */}
+                <Field icon={<QrCode className="h-4 w-4" />} label="Scan barcode / QR">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={scanInput}
+                      onChange={(e) => setScanInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleScanSubmit(scanInput); } }}
+                      placeholder="Scan or paste a QR / barcode and press Enter"
+                      className="h-11 flex-1 border-0 bg-foreground/5 text-base"
+                    />
+                    <button
+                      type="button" onClick={() => setScanOpen(true)}
+                      title="Open camera scanner"
+                      className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-aqua/15 px-3 text-[12px] font-bold text-aqua ring-1 ring-aqua/30 transition hover:bg-aqua/25"
+                    >
+                      <ScanLine className="h-4 w-4" /> Scan
+                    </button>
+                  </div>
+                </Field>
+
+                {/* Mobile — separate field, auto-search */}
                 <div className="relative">
-                  <Field icon={<Phone className="h-4 w-4" />} label="Mobile (auto-search · scan barcode)">
+                  <Field icon={<Phone className="h-4 w-4" />} label="Mobile (auto-search)">
                     <IntlPhoneInput
                       value={mobile} onChange={setMobile}
-                      placeholder="Type or scan barcode/QR"
-                      className="pr-24"
+                      defaultCountry="QA"
+                      placeholder="Enter phone number"
+                      className="pr-10"
                     />
-                    <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
+                    <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
                       {lookupBusy ? <Zap className="h-4 w-4 animate-pulse text-aqua" /> :
                         mobile.trim().length >= 3 ? <Search className="h-4 w-4 text-aqua" /> : null}
-                      <button
-                        type="button" onClick={() => setScanOpen(true)}
-                        title="Scan barcode/QR"
-                        className="inline-flex items-center gap-1 rounded-lg bg-aqua/15 px-2 py-1.5 text-[11px] font-bold text-aqua ring-1 ring-aqua/30 transition hover:bg-aqua/25"
-                      >
-                        <ScanLine className="h-3.5 w-3.5" /> Scan
-                      </button>
                     </div>
                   </Field>
 
