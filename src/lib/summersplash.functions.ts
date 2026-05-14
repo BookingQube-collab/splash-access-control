@@ -318,6 +318,20 @@ export const searchByMobile = createServerFn({ method: "POST" })
     return { results: regs ?? [] };
   });
 
+export const lookupByToken = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ token: z.string().min(1).max(300) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const m = data.token.match(/[0-9a-fA-F-]{36}/);
+    const token = m ? m[0] : data.token;
+    const { data: reg } = await context.supabase
+      .from("registrations")
+      .select("id, customer_name, mobile, email, guest_count, qr_token, status, created_at, slots(name, starts_at)")
+      .eq("qr_token", token)
+      .maybeSingle();
+    return { result: reg ?? null };
+  });
+
 // ============ PUBLIC: list all passes by mobile number ============
 export const getMyPasses = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ mobile: z.string().trim().min(7).max(20) }).parse(d))
