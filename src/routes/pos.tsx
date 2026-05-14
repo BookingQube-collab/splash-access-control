@@ -11,10 +11,11 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   Search, User, Phone, Mail, Users, Ticket, ExternalLink, Sparkles,
-  QrCode, ArrowRight, CheckCircle2, Edit3, X, History, Zap,
+  QrCode, ArrowRight, CheckCircle2, Edit3, X, History, Zap, ScanLine, Camera,
 } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
 import { QrPassModal } from "@/components/qr-pass-modal";
+import { Html5Qrcode } from "html5-qrcode";
 
 export const Route = createFileRoute("/pos")({
   component: () => (<RoleGuard role="pos" loginPath="/login/pos"><POS /></RoleGuard>),
