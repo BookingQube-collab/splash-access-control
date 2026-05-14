@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as PosRouteImport } from './routes/pos'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PassTokenRouteImport } from './routes/pass.$token'
@@ -21,6 +22,11 @@ import { Route as LoginAdminRouteImport } from './routes/login.admin'
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PosRoute = PosRouteImport.update({
+  id: '/pos',
+  path: '/pos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -62,6 +68,7 @@ const LoginAdminRoute = LoginAdminRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/pos': typeof PosRoute
   '/register': typeof RegisterRoute
   '/login/admin': typeof LoginAdminRoute
   '/login/dashboard': typeof LoginDashboardRoute
@@ -72,6 +79,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/pos': typeof PosRoute
   '/register': typeof RegisterRoute
   '/login/admin': typeof LoginAdminRoute
   '/login/dashboard': typeof LoginDashboardRoute
@@ -83,6 +91,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/pos': typeof PosRoute
   '/register': typeof RegisterRoute
   '/login/admin': typeof LoginAdminRoute
   '/login/dashboard': typeof LoginDashboardRoute
@@ -95,6 +104,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/pos'
     | '/register'
     | '/login/admin'
     | '/login/dashboard'
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/dashboard'
+    | '/pos'
     | '/register'
     | '/login/admin'
     | '/login/dashboard'
@@ -115,6 +126,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/pos'
     | '/register'
     | '/login/admin'
     | '/login/dashboard'
@@ -126,6 +138,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
+  PosRoute: typeof PosRoute
   RegisterRoute: typeof RegisterRoute
   LoginAdminRoute: typeof LoginAdminRoute
   LoginDashboardRoute: typeof LoginDashboardRoute
@@ -141,6 +154,13 @@ declare module '@tanstack/react-router' {
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pos': {
+      id: '/pos'
+      path: '/pos'
+      fullPath: '/pos'
+      preLoaderRoute: typeof PosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -198,6 +218,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
+  PosRoute: PosRoute,
   RegisterRoute: RegisterRoute,
   LoginAdminRoute: LoginAdminRoute,
   LoginDashboardRoute: LoginDashboardRoute,
