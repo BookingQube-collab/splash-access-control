@@ -476,11 +476,11 @@ function Section({ icon, title, trailing, children }: {
   icon: React.ReactNode; title: string; trailing?: React.ReactNode; children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-3xl glass-strong p-5 shadow-soft">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-aqua/15 text-aqua">{icon}</div>
-          <h2 className="font-display text-base font-bold">{title}</h2>
+    <section className="rounded-2xl glass-strong p-3.5 shadow-soft sm:p-4">
+      <div className="mb-2.5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="grid h-7 w-7 place-items-center rounded-lg bg-aqua/15 text-aqua">{icon}</div>
+          <h2 className="font-display text-sm font-bold">{title}</h2>
         </div>
         {trailing}
       </div>
