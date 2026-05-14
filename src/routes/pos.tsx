@@ -126,12 +126,31 @@ function POS() {
               </PField>
             </div>
 
-            <button type="submit"
-              className="group relative inline-flex h-14 w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset text-base font-semibold text-foreground shadow-glow-sunset">
-              <Sparkles className="h-5 w-5" />
-              <span>Register & Generate QR</span>
-              <span className="absolute inset-0 animate-shimmer opacity-50" />
-            </button>
+            {(() => {
+              const slot = (data?.slots ?? []).find((s) => s.id === slotId);
+              if (!slot) return null;
+              const full = slot.remaining <= 0;
+              const over = !full && guests > slot.remaining;
+              if (!full && !over) return null;
+              return (
+                <div className="rounded-xl border border-coral/30 bg-coral/10 px-4 py-3 text-xs font-semibold text-coral">
+                  {full ? "Selected slot is full — pick another slot." : `Only ${slot.remaining} ${slot.remaining === 1 ? "spot" : "spots"} left — reduce guest count.`}
+                </div>
+              );
+            })()}
+
+            {(() => {
+              const slot = (data?.slots ?? []).find((s) => s.id === slotId);
+              const blocked = !slot || slot.remaining <= 0 || guests > slot.remaining;
+              return (
+                <button type="submit" disabled={blocked}
+                  className="group relative inline-flex h-14 w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset text-base font-semibold text-foreground shadow-glow-sunset disabled:cursor-not-allowed disabled:opacity-50">
+                  <Sparkles className="h-5 w-5" />
+                  <span>{blocked && slot ? (slot.remaining <= 0 ? "Slot full" : "Not enough capacity") : "Register & Generate QR"}</span>
+                  <span className="absolute inset-0 animate-shimmer opacity-50" />
+                </button>
+              );
+            })()}
           </form>
         </div>
 
