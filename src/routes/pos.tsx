@@ -392,7 +392,7 @@ function POS() {
 
       {/* === Barcode/QR scan modal === */}
       <Dialog open={scanOpen} onOpenChange={setScanOpen}>
-        <DialogContent className="max-w-md border-0 bg-transparent p-0 shadow-none">
+        <DialogContent className="max-w-md border-0 bg-transparent p-0 shadow-none [&>button]:hidden">
           <div className="overflow-hidden rounded-3xl glass-strong p-5 shadow-soft">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -420,7 +420,7 @@ function POS() {
 
       {/* === Confirmation modal === */}
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent className="max-w-md border-0 bg-transparent p-0 shadow-none">
+        <DialogContent className="max-w-md border-0 bg-transparent p-0 shadow-none [&>button]:hidden">
           <motion.div
             initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
             transition={{ type: "spring", stiffness: 280, damping: 26 }}
