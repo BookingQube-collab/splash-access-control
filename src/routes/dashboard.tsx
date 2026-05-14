@@ -29,9 +29,17 @@ function DashboardPage() {
       inside: a.inside + s.entered,
       active: a.active + s.active,
       invalid: a.invalid + s.invalid,
+      booked: a.booked + (s.booked ?? 0),
     }),
-    { capacity: 0, inside: 0, active: 0, invalid: 0 }
+    { capacity: 0, inside: 0, active: 0, invalid: 0, booked: 0 }
   );
+
+  const chartData = slots.map((s: any) => ({
+    name: s.name.length > 14 ? s.name.slice(0, 12) + "…" : s.name,
+    Booked: s.booked ?? 0,
+    Inside: s.entered,
+    Capacity: s.capacity,
+  }));
 
   return (
     <div className="relative min-h-screen px-6 py-8">
