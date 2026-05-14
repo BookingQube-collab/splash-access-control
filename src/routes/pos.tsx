@@ -114,13 +114,52 @@ function POS() {
                 <Input required value={name} onChange={(e) => setName(e.target.value)} className="h-12 border-0 bg-foreground/5 text-base" />
               </PField>
               <div className="grid grid-cols-2 gap-3">
-                <PField icon={<Phone className="h-4 w-4" />} label="Mobile">
-                  <Input required value={mobile} onChange={(e) => setMobile(e.target.value)} className="h-12 border-0 bg-foreground/5 text-base" />
-                </PField>
-                <PField icon={<Users className="h-4 w-4" />} label="Guests">
-                  <Input type="number" min={1} max={20} value={guests} onChange={(e) => setGuests(Number(e.target.value))} className="h-12 border-0 bg-foreground/5 text-base" />
-                </PField>
-              </div>
+              <PField icon={<Phone className="h-4 w-4" />} label="Mobile">
+                <Input required value={mobile} onChange={(e) => setMobile(e.target.value)} className="h-12 border-0 bg-foreground/5 text-base" />
+              </PField>
+              {(() => {
+                const slot = (data?.slots ?? []).find((s) => s.id === slotId);
+                const cap = slot ? Math.max(1, slot.remaining) : 20;
+                const max = Math.min(20, cap);
+                const setG = (n: number) => setGuests(Math.max(1, Math.min(max, Math.floor(n) || 1)));
+                const presets = [1, 2, 4, 6].filter((n) => n <= max);
+                return (
+                  <div>
+                    <Label className="mb-1.5 flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground">
+                      <span className="flex items-center gap-1.5"><Users className="h-4 w-4" /> Guests</span>
+                      {slot && <span className="normal-case tracking-normal text-[11px] text-muted-foreground/80">max <b className="text-aqua">{max}</b></span>}
+                    </Label>
+                    <div className="flex items-stretch gap-2 rounded-2xl border border-foreground/10 bg-foreground/5 p-1.5 shadow-inner">
+                      <motion.button whileTap={{ scale: 0.92 }} type="button" onClick={() => setG(guests - 1)} disabled={guests <= 1}
+                        className="grid h-14 w-14 place-items-center rounded-xl bg-foreground/10 text-2xl font-bold text-foreground transition hover:bg-coral/20 hover:text-coral disabled:cursor-not-allowed disabled:opacity-40 active:bg-coral/30">
+                        −
+                      </motion.button>
+                      <input
+                        type="number" inputMode="numeric" min={1} max={max} value={guests}
+                        onChange={(e) => setG(Number(e.target.value))}
+                        className="h-14 w-full min-w-0 rounded-xl bg-transparent text-center font-display text-3xl font-bold tabular-nums tracking-tight outline-none focus:bg-foreground/5"
+                      />
+                      <motion.button whileTap={{ scale: 0.92 }} type="button" onClick={() => setG(guests + 1)} disabled={guests >= max}
+                        className="grid h-14 w-14 place-items-center rounded-xl bg-foreground/10 text-2xl font-bold text-foreground transition hover:bg-aqua/20 hover:text-aqua disabled:cursor-not-allowed disabled:opacity-40 active:bg-aqua/30">
+                        +
+                      </motion.button>
+                    </div>
+                    {presets.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {presets.map((n) => (
+                          <button key={n} type="button" onClick={() => setG(n)}
+                            className={`h-9 min-w-[44px] rounded-lg px-3 text-sm font-semibold transition ${
+                              guests === n ? "bg-aqua text-primary-foreground shadow-glow-aqua" : "bg-foreground/5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+                            }`}>
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
               <PField icon={<Mail className="h-4 w-4" />} label="Email (optional)">
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-12 border-0 bg-foreground/5 text-base" />
               </PField>
