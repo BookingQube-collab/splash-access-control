@@ -300,11 +300,10 @@ function POS() {
               <div className="space-y-2.5">
                 <div className="relative">
                   <Field icon={<Phone className="h-4 w-4" />} label="Mobile (auto-search · scan barcode)">
-                    <Input
-                      inputMode="tel" autoComplete="tel" value={mobile}
-                      onChange={(e) => setMobile(e.target.value)}
+                    <IntlPhoneInput
+                      value={mobile} onChange={setMobile}
                       placeholder="Type or scan barcode/QR"
-                      className="h-11 border-0 bg-foreground/5 pr-24 text-base tracking-wide"
+                      className="pr-24"
                     />
                     <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
                       {lookupBusy ? <Zap className="h-4 w-4 animate-pulse text-aqua" /> :
