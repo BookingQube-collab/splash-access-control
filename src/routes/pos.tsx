@@ -225,17 +225,24 @@ function POS() {
         <Section icon={<User className="h-4 w-4" />} title="Customer">
           <div className="space-y-3">
             <div className="relative">
-              <Field icon={<Phone className="h-4 w-4" />} label="Mobile (auto-search existing)">
+              <Field icon={<Phone className="h-4 w-4" />} label="Mobile (auto-search · scan barcode)">
                 <Input
                   inputMode="tel" autoComplete="tel" value={mobile}
                   onChange={(e) => setMobile(e.target.value)}
-                  placeholder="e.g. 30077074"
-                  className="h-14 border-0 bg-foreground/5 pr-12 text-lg tracking-wide"
+                  placeholder="Type or scan barcode/QR"
+                  className="h-14 border-0 bg-foreground/5 pr-24 text-lg tracking-wide"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
                   {lookupBusy ? <Zap className="h-4 w-4 animate-pulse text-aqua" /> :
                     mobile.trim().length >= 3 ? <Search className="h-4 w-4 text-aqua" /> : null}
-                </span>
+                  <button
+                    type="button" onClick={() => setScanOpen(true)}
+                    title="Scan barcode/QR"
+                    className="inline-flex items-center gap-1 rounded-lg bg-aqua/15 px-2.5 py-1.5 text-[11px] font-bold text-aqua ring-1 ring-aqua/30 transition hover:bg-aqua/25"
+                  >
+                    <ScanLine className="h-3.5 w-3.5" /> Scan
+                  </button>
+                </div>
               </Field>
 
               <AnimatePresence>
