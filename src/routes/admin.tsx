@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import {
   adminListEvents, adminUpsertEvent, adminDeleteEvent,
-  adminListSlots, adminUpsertSlot, adminDeleteSlot,
+  adminListSlots, adminUpsertSlot, adminDeleteSlot, adminGenerateSlots,
   adminListRegistrations,
   adminGetSettings, adminSaveSettings,
   adminListUsers, adminCreateUser, adminSetRole, adminDeleteUser,
@@ -24,6 +24,7 @@ import {
 } from "@/lib/admin.functions";
 import { getDashboardCounts } from "@/lib/summersplash.functions";
 import { BeachBg } from "@/components/beach-bg";
+import { AnimatedCount } from "@/components/animated-count";
 
 export const Route = createFileRoute("/admin")({
   component: () => (<RoleGuard role="admin" loginPath="/login/admin"><Admin /></RoleGuard>),
