@@ -144,18 +144,27 @@ function EventsTab() {
   const list = useServerFn(adminListEvents); const upsert = useServerFn(adminUpsertEvent); const del = useServerFn(adminDeleteEvent);
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["a-events"], queryFn: () => list() });
+  const today = new Date().toISOString().slice(0, 10);
   const [name, setName] = useState("SummerSplash");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [start, setStart] = useState(today);
+  const [end, setEnd] = useState(today);
   const m = useMutation({
-    mutationFn: () => upsert({ data: { name, event_date: date, is_active: true } }),
-    onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["a-events"] }); }
+    mutationFn: () => upsert({ data: { name, start_date: start, end_date: end, is_active: true } }),
+    onSuccess: () => { toast.success("Event saved"); qc.invalidateQueries({ queryKey: ["a-events"] }); }
   });
   return (
     <Panel title="Events">
-      <div className="mb-5 grid gap-2 md:grid-cols-[1fr_180px_auto]">
+      <div className="mb-5 grid gap-2 md:grid-cols-[1fr_160px_160px_auto]">
         <Input placeholder="Event name" value={name} onChange={(e) => setName(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-        <button onClick={() => m.mutate()} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-aqua px-5 text-sm font-semibold text-primary-foreground shadow-glow-aqua">
+        <div>
+          <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Start</Label>
+          <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="h-11 border-0 bg-foreground/5" />
+        </div>
+        <div>
+          <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">End</Label>
+          <Input type="date" value={end} min={start} onChange={(e) => setEnd(e.target.value)} className="h-11 border-0 bg-foreground/5" />
+        </div>
+        <button onClick={() => m.mutate()} className="inline-flex items-center justify-center gap-1.5 self-end rounded-xl bg-aqua px-5 h-11 text-sm font-semibold text-primary-foreground shadow-glow-aqua">
           <Plus className="h-4 w-4" /> Add
         </button>
       </div>
@@ -165,7 +174,7 @@ function EventsTab() {
             <div>
               <div className="font-semibold">{e.name}</div>
               <div className="text-xs text-muted-foreground">
-                {format(new Date(e.event_date), "PP")} ·
+                {format(new Date(e.start_date ?? e.event_date), "PP")} → {format(new Date(e.end_date ?? e.event_date), "PP")} ·
                 <span className={`ml-1 inline-flex items-center gap-1 ${e.is_active ? "text-success" : "text-muted-foreground"}`}>
                   <span className={`h-1.5 w-1.5 rounded-full ${e.is_active ? "bg-success" : "bg-muted-foreground"}`} />
                   {e.is_active ? "Active" : "Inactive"}
@@ -173,7 +182,7 @@ function EventsTab() {
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={async () => { await upsert({ data: { id: e.id, name: e.name, event_date: e.event_date, is_active: !e.is_active } }); qc.invalidateQueries({ queryKey: ["a-events"] }); }}
+              <button onClick={async () => { await upsert({ data: { id: e.id, name: e.name, start_date: e.start_date ?? e.event_date, end_date: e.end_date ?? e.event_date, is_active: !e.is_active } }); qc.invalidateQueries({ queryKey: ["a-events"] }); }}
                 className="rounded-lg glass px-3 py-1.5 text-xs font-semibold hover-glow">{e.is_active ? "Deactivate" : "Activate"}</button>
               <button onClick={async () => { if (confirm("Delete?")) { await del({ data: { id: e.id } }); qc.invalidateQueries({ queryKey: ["a-events"] }); } }}
                 className="rounded-lg bg-destructive/15 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/25">
@@ -188,33 +197,111 @@ function EventsTab() {
   );
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 function SlotsTab() {
   const listE = useServerFn(adminListEvents); const list = useServerFn(adminListSlots);
   const upsert = useServerFn(adminUpsertSlot); const del = useServerFn(adminDeleteSlot);
+  const generate = useServerFn(adminGenerateSlots);
   const qc = useQueryClient();
   const { data: events } = useQuery({ queryKey: ["a-events"], queryFn: () => listE() });
   const { data } = useQuery({ queryKey: ["a-slots"], queryFn: () => list() });
-  const [eventId, setEventId] = useState(""); const [name, setName] = useState("");
-  const [starts, setStarts] = useState(""); const [ends, setEnds] = useState(""); const [cap, setCap] = useState(50);
-  const add = async () => {
-    if (!eventId || !name || !starts || !ends) return toast.error("Fill all fields");
-    await upsert({ data: { event_id: eventId, name, starts_at: new Date(starts).toISOString(), ends_at: new Date(ends).toISOString(), capacity: cap } });
-    qc.invalidateQueries({ queryKey: ["a-slots"] }); toast.success("Saved");
-    setName(""); setStarts(""); setEnds("");
+
+  const [eventId, setEventId] = useState("");
+  const [name, setName] = useState("");
+  const [startTime, setStartTime] = useState("10:00");
+  const [endTime, setEndTime] = useState("13:00");
+  const [cap, setCap] = useState(50);
+  const [recurrence, setRecurrence] = useState<"once" | "daily" | "weekly" | "monthly">("once");
+  const [weekday, setWeekday] = useState(new Date().getDay());
+
+  const selectedEvent = (events?.events ?? []).find((e: any) => e.id === eventId);
+
+  const handleGenerate = async () => {
+    if (!eventId || !name) return toast.error("Pick an event and slot name");
+    if (endTime <= startTime) return toast.error("End time must be after start");
+    try {
+      const res = await generate({ data: {
+        event_id: eventId, name, start_time: startTime, end_time: endTime, capacity: cap,
+        recurrence, ...(recurrence === "weekly" ? { weekday } : {}),
+      } });
+      qc.invalidateQueries({ queryKey: ["a-slots"] });
+      toast.success(`Generated ${res.count} slot${res.count > 1 ? "s" : ""}`);
+      setName("");
+    } catch (e: any) { toast.error(e.message); }
   };
+
   return (
     <Panel title="Slots & Capacity">
-      <div className="mb-5 grid gap-2 md:grid-cols-6">
-        <select className="h-11 rounded-xl border-0 bg-foreground/5 px-3 text-sm" value={eventId} onChange={(e) => setEventId(e.target.value)}>
-          <option value="">Event…</option>
-          {(events?.events ?? []).map((e: any) => <option key={e.id} value={e.id}>{e.name} · {e.event_date}</option>)}
-        </select>
-        <Input placeholder="Slot name" value={name} onChange={(e) => setName(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-        <Input type="datetime-local" value={starts} onChange={(e) => setStarts(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-        <Input type="datetime-local" value={ends} onChange={(e) => setEnds(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-        <Input type="number" min={1} value={cap} onChange={(e) => setCap(Number(e.target.value))} className="h-11 border-0 bg-foreground/5" placeholder="Capacity" />
-        <button onClick={add} className="rounded-xl bg-aqua text-sm font-semibold text-primary-foreground shadow-glow-aqua">Add slot</button>
+      <div className="mb-6 rounded-2xl glass p-5 space-y-4">
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Event</Label>
+            <select className="h-11 w-full rounded-xl border-0 bg-foreground/5 px-3 text-sm" value={eventId} onChange={(e) => setEventId(e.target.value)}>
+              <option value="">Select an event…</option>
+              {(events?.events ?? []).map((e: any) => (
+                <option key={e.id} value={e.id}>
+                  {e.name} · {format(new Date(e.start_date ?? e.event_date), "MMM d")} → {format(new Date(e.end_date ?? e.event_date), "MMM d")}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Slot name</Label>
+            <Input placeholder="e.g. Morning Splash" value={name} onChange={(e) => setName(e.target.value)} className="h-11 border-0 bg-foreground/5" />
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-4">
+          <div>
+            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Start time</Label>
+            <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="h-11 border-0 bg-foreground/5" />
+          </div>
+          <div>
+            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">End time</Label>
+            <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="h-11 border-0 bg-foreground/5" />
+          </div>
+          <div>
+            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Capacity</Label>
+            <Input type="number" min={1} value={cap} onChange={(e) => setCap(Number(e.target.value))} className="h-11 border-0 bg-foreground/5" />
+          </div>
+          <div>
+            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Recurrence</Label>
+            <select className="h-11 w-full rounded-xl border-0 bg-foreground/5 px-3 text-sm" value={recurrence} onChange={(e) => setRecurrence(e.target.value as any)}>
+              <option value="once">Once (start date only)</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+        </div>
+
+        {recurrence === "weekly" && (
+          <div>
+            <Label className="mb-1.5 block text-[10px] uppercase tracking-wider text-muted-foreground">On weekday</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {WEEKDAYS.map((d, i) => (
+                <button key={d} type="button" onClick={() => setWeekday(i)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${weekday === i ? "bg-aqua text-primary-foreground shadow-glow-aqua" : "bg-foreground/5 text-muted-foreground hover:bg-foreground/10"}`}>
+                  {d}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-foreground/5 pt-4">
+          <p className="text-xs text-muted-foreground">
+            {selectedEvent ? (
+              <>Will generate within <b className="text-foreground">{format(new Date(selectedEvent.start_date ?? selectedEvent.event_date), "MMM d")}</b> – <b className="text-foreground">{format(new Date(selectedEvent.end_date ?? selectedEvent.event_date), "MMM d")}</b></>
+            ) : "Select an event to preview the date range."}
+          </p>
+          <button onClick={handleGenerate} className="inline-flex items-center gap-1.5 rounded-xl bg-sunset px-5 h-11 text-sm font-semibold text-foreground shadow-glow-sunset">
+            <Plus className="h-4 w-4" /> Generate slots
+          </button>
+        </div>
       </div>
+
       <div className="space-y-2">
         {(data?.slots ?? []).map((s: any) => (
           <div key={s.id} className="flex items-center justify-between rounded-2xl glass p-4">
@@ -230,6 +317,8 @@ function SlotsTab() {
         ))}
         {(data?.slots ?? []).length === 0 && <p className="text-sm text-muted-foreground">No slots yet.</p>}
       </div>
+      {/* Suppress unused warning */}
+      <span className="hidden">{typeof upsert}</span>
     </Panel>
   );
 }
