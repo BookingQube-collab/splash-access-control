@@ -460,14 +460,7 @@ function POS() {
       <footer className="relative z-10 mt-3 border-t border-foreground/5 bg-background/40 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-[1400px] flex-wrap items-center justify-between gap-2 px-4 py-3 text-[11px] text-muted-foreground">
           <span>© {new Date().getFullYear()} SummerSplash. All rights reserved.</span>
-          <span className="flex items-center gap-2">
-            <span>Powered by</span>
-            <span className="inline-flex items-center gap-1 rounded-md bg-foreground/5 px-2 py-0.5 ring-1 ring-foreground/10">
-              <Sparkles className="h-3 w-3 text-sunset" />
-              <span className="font-display font-bold text-foreground">Lovable</span>
-            </span>
-            <span className="tabular-nums">v1.0.0</span>
-          </span>
+          <span className="tabular-nums">v1.0.0</span>
         </div>
       </footer>
 
