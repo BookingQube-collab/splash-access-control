@@ -394,7 +394,7 @@ function DashTab() {
           {slots.map((s: any) => {
             const occ = Math.min(100, Math.round((s.entered / Math.max(1, s.capacity)) * 100));
             return (
-              <div key={s.id} className="rounded-2xl glass p-4">
+              <motion.div key={s.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl glass p-4 hover-glow">
                 <div className="flex items-baseline justify-between">
                   <div className="font-display font-semibold">{s.name}</div>
                   <div className="text-xs text-muted-foreground">{s.remaining}/{s.capacity}</div>
@@ -404,11 +404,11 @@ function DashTab() {
                     className={`h-full rounded-full ${occ > 85 ? "bg-coral" : "bg-gradient-to-r from-aqua to-primary"}`} />
                 </div>
                 <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-muted-foreground">
-                  <span>Inside <b className="text-foreground">{s.entered}</b></span>
-                  <span>Active <b className="text-foreground">{s.active}</b></span>
-                  <span>Exited <b className="text-foreground">{s.exited}</b></span>
+                  <span>Inside <b className="text-foreground"><AnimatedCount value={s.entered} /></b></span>
+                  <span>Active <b className="text-foreground"><AnimatedCount value={s.active} /></b></span>
+                  <span>Exited <b className="text-foreground"><AnimatedCount value={s.exited} /></b></span>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
           {slots.length === 0 && <p className="col-span-full text-sm text-muted-foreground">No active slots.</p>}
