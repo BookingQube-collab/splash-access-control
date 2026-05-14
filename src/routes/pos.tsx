@@ -52,6 +52,39 @@ function POS() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMeta, setModalMeta] = useState<{ name?: string; slot?: string; guests?: number }>({});
 
+  // ---- Barcode/QR scanner for mobile lookup ----
+  const [scanOpen, setScanOpen] = useState(false);
+  const scanRef = useRef<Html5Qrcode | null>(null);
+  const stopScanner = async () => {
+    if (scanRef.current) {
+      try { await scanRef.current.stop(); await scanRef.current.clear(); } catch { /* noop */ }
+      scanRef.current = null;
+    }
+  };
+  useEffect(() => {
+    if (!scanOpen) { stopScanner(); return; }
+    const t = setTimeout(async () => {
+      const el = document.getElementById("pos-scan-reader");
+      if (!el) return;
+      const q = new Html5Qrcode("pos-scan-reader");
+      scanRef.current = q;
+      try {
+        await q.start(
+          { facingMode: "environment" }, { fps: 10, qrbox: 240 },
+          (decoded) => {
+            const cleaned = decoded.replace(/\D/g, "") || decoded.trim();
+            setMobile(cleaned);
+            setScanOpen(false);
+            toast.success(`Scanned ${cleaned}`);
+          },
+          () => { /* ignore per-frame errors */ },
+        );
+      } catch (e: any) { toast.error(e?.message ?? "Camera unavailable"); setScanOpen(false); }
+    }, 80);
+    return () => { clearTimeout(t); stopScanner(); };
+  }, [scanOpen]);
+  useEffect(() => () => { stopScanner(); }, []);
+
   // ---- Live mobile lookup (debounced) ----
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
