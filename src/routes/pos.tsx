@@ -280,7 +280,7 @@ function POS() {
               )}
             </Section>
 
-            <Section icon={<User className="h-4 w-4" />} title="Customer">
+            <Section step={2} title="Customer">
               <div className="space-y-2.5">
                 <div className="relative">
                   <Field icon={<Phone className="h-4 w-4" />} label="Mobile (auto-search · scan barcode)">
