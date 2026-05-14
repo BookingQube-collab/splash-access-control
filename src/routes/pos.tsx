@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import {
   Search, User, Phone, Mail, Users, Ticket, ExternalLink, Sparkles,
   QrCode, ArrowRight, CheckCircle2, Edit3, X, History, Zap, ScanLine, Camera,
+  Maximize2, Minimize2,
 } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
 import { QrPassModal } from "@/components/qr-pass-modal";
