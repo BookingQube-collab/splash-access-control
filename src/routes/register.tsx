@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { BeachBg } from "@/components/beach-bg";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { IntlPhoneInput } from "@/components/phone-input";
 
 export const Route = createFileRoute("/register")({
   head: () => ({
@@ -203,7 +204,12 @@ function RegisterPage() {
             <div className="space-y-3.5">
               <FloatField id="rname" label="Full name" value={name} onChange={setName} icon={<User className="h-4 w-4" />} required maxLength={120} />
               <div className="grid grid-cols-[1fr_110px] gap-3">
-                <FloatField id="rmobile" label="Mobile" value={mobile} onChange={setMobile} icon={<Phone className="h-4 w-4" />} required maxLength={20} />
+                <div>
+                  <Label className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                    <Phone className="h-3.5 w-3.5" /> Mobile
+                  </Label>
+                  <IntlPhoneInput value={mobile} onChange={setMobile} placeholder="Mobile" />
+                </div>
                 <FloatField id="rguests" label="Guests" type="number" value={String(guests)} onChange={(v) => setGuests(Math.max(1, Math.min(20, Number(v) || 1)))} icon={<Users className="h-4 w-4" />} />
               </div>
               <FloatField id="remail" label="Email (optional)" type="email" value={email} onChange={setEmail} icon={<Mail className="h-4 w-4" />} maxLength={255} />

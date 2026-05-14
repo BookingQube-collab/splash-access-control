@@ -4,7 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RoleGuard } from "@/components/role-guard";
-import { getPublicEvent, posRegister, searchByMobile } from "@/lib/summersplash.functions";
+import { getPublicEvent, posRegister, searchByMobile, lookupByToken } from "@/lib/summersplash.functions";
+import { IntlPhoneInput } from "@/components/phone-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -36,6 +37,7 @@ function POS() {
   const fetchEvent = useServerFn(getPublicEvent);
   const register = useServerFn(posRegister);
   const search = useServerFn(searchByMobile);
+  const lookupToken = useServerFn(lookupByToken);
   const { signOut } = useAuth();
   const navigate = useNavigate();
   const { data, refetch } = useQuery({
@@ -79,10 +81,23 @@ function POS() {
         await q.start(
           { facingMode: "environment" }, { fps: 10, qrbox: 240 },
           (decoded) => {
-            const cleaned = decoded.replace(/\D/g, "") || decoded.trim();
-            setMobile(cleaned);
             setScanOpen(false);
-            toast.success(`Scanned ${cleaned}`);
+            const raw = decoded.trim();
+            const tokenMatch = raw.match(/[0-9a-fA-F-]{36}/);
+            if (tokenMatch) {
+              lookupToken({ data: { token: tokenMatch[0] } }).then((r) => {
+                if (r?.result) {
+                  applyCustomer(r.result as Registration);
+                  toast.success(`Loaded ${(r.result as Registration).customer_name}`);
+                } else {
+                  toast.error("QR not recognised");
+                }
+              }).catch(() => toast.error("Lookup failed"));
+            } else {
+              const cleaned = raw.replace(/\D/g, "") || raw;
+              setMobile(cleaned.startsWith("+") ? cleaned : `+${cleaned}`);
+              toast.success(`Scanned ${cleaned}`);
+            }
           },
           () => { /* ignore per-frame errors */ },
         );
@@ -218,7 +233,7 @@ function POS() {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto w-full max-w-[1400px] px-3 py-3 sm:px-4">
+      <main className="relative z-10 mx-auto flex w-full max-w-[1400px] flex-1 flex-col px-3 py-3 sm:px-4">
         <div className="grid h-full gap-3 lg:grid-cols-12">
           {/* === LEFT column: slots + customer === */}
           <div className="space-y-3 lg:col-span-7">
@@ -285,11 +300,10 @@ function POS() {
               <div className="space-y-2.5">
                 <div className="relative">
                   <Field icon={<Phone className="h-4 w-4" />} label="Mobile (auto-search · scan barcode)">
-                    <Input
-                      inputMode="tel" autoComplete="tel" value={mobile}
-                      onChange={(e) => setMobile(e.target.value)}
+                    <IntlPhoneInput
+                      value={mobile} onChange={setMobile}
                       placeholder="Type or scan barcode/QR"
-                      className="h-11 border-0 bg-foreground/5 pr-24 text-base tracking-wide"
+                      className="pr-24"
                     />
                     <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
                       {lookupBusy ? <Zap className="h-4 w-4 animate-pulse text-aqua" /> :
@@ -446,7 +460,7 @@ function POS() {
         </div>
 
         {/* === Trust / feature row === */}
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-auto pt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <TrustCard icon={<ShieldCheck className="h-5 w-5" />} tone="aqua"
             title="Secure & Reliable" body="Your data is encrypted and transactions are secure." />
           <TrustCard icon={<Timer className="h-5 w-5" />} tone="primary"
