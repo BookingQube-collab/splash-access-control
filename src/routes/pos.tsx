@@ -221,7 +221,7 @@ function POS() {
         <div className="grid h-full gap-3 lg:grid-cols-12">
           {/* === LEFT column: slots + customer === */}
           <div className="space-y-3 lg:col-span-7">
-            <Section icon={<Ticket className="h-4 w-4" />} title="Choose slot" trailing={
+            <Section step={1} title="Choose slot" trailing={
               slot && <SlotMeterBadge slot={slot} guests={guests} />
             }>
               {(data?.slots ?? []).length === 0 ? (
@@ -229,41 +229,48 @@ function POS() {
               ) : (data?.slots ?? []).every((s) => s.remaining <= 0) ? (
                 <FullBanner>All slots are full — registrations are paused.</FullBanner>
               ) : (
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-                  {(data?.slots ?? []).map((s) => {
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {(data?.slots ?? []).map((s, idx) => {
                     const full = s.remaining <= 0;
                     const selected = slotId === s.id;
                     const booked = s.capacity - s.remaining;
                     const pct = Math.min(100, Math.round((booked / Math.max(1, s.capacity)) * 100));
+                    const palette = SLOT_PALETTE[idx % SLOT_PALETTE.length];
+                    const Icon = palette.Icon;
                     return (
                       <motion.button
                         key={s.id} type="button" whileTap={{ scale: 0.97 }}
                         onClick={() => !full && setSlotId(s.id)} disabled={full}
                         className={`relative overflow-hidden rounded-2xl p-4 text-left transition ${
-                          selected ? "glass-strong ring-2 ring-aqua shadow-glow-aqua"
-                                   : "glass hover:ring-1 hover:ring-aqua/40"
+                          selected ? `glass-strong ring-2 ${palette.ring} ${palette.glow}`
+                                   : "glass hover:ring-1 hover:ring-foreground/15"
                         } ${full ? "cursor-not-allowed opacity-50" : ""}`}
                       >
-                        {selected && (
-                          <span className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full bg-aqua text-primary-foreground">
-                            <CheckCircle2 className="h-3 w-3" />
+                        <div className="flex items-start justify-between">
+                          <span className={`grid h-11 w-11 place-items-center rounded-xl ring-1 ${palette.iconBg}`}>
+                            <Icon className="h-5 w-5" />
                           </span>
-                        )}
-                        <div className="font-display text-base font-bold leading-tight">{s.name}</div>
-                        <div className="mt-2 flex items-baseline gap-1">
+                          {selected && (
+                            <span className={`grid h-6 w-6 place-items-center rounded-full ${palette.checkBg} text-primary-foreground`}>
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-3 font-display text-base font-bold leading-tight">{s.name}</div>
+                        <div className="mt-1.5 flex items-baseline gap-1.5">
                           {full ? (
                             <span className="rounded-md bg-coral/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-coral">Full</span>
                           ) : (
                             <>
-                              <span className="font-display text-2xl font-extrabold tabular-nums text-foreground">{booked}</span>
+                              <span className="font-display text-3xl font-extrabold tabular-nums text-foreground">{booked}</span>
                               <span className="text-xs text-muted-foreground">/ {s.capacity}</span>
                             </>
                           )}
                         </div>
-                        <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-foreground/10">
+                        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-foreground/10">
                           <motion.div
                             initial={false} animate={{ width: `${pct}%` }} transition={{ duration: 0.4 }}
-                            className={`h-full rounded-full bg-gradient-to-r ${meterTone(pct, full)}`}
+                            className={`h-full rounded-full bg-gradient-to-r ${palette.bar}`}
                           />
                         </div>
                       </motion.button>
