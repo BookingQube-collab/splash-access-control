@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ScannerRouteImport } from './routes/scanner'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as PosRouteImport } from './routes/pos'
 import { Route as DashboardRouteImport } from './routes/dashboard'
@@ -19,6 +20,11 @@ import { Route as LoginPosRouteImport } from './routes/login.pos'
 import { Route as LoginDashboardRouteImport } from './routes/login.dashboard'
 import { Route as LoginAdminRouteImport } from './routes/login.admin'
 
+const ScannerRoute = ScannerRouteImport.update({
+  id: '/scanner',
+  path: '/scanner',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
@@ -70,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/pos': typeof PosRoute
   '/register': typeof RegisterRoute
+  '/scanner': typeof ScannerRoute
   '/login/admin': typeof LoginAdminRoute
   '/login/dashboard': typeof LoginDashboardRoute
   '/login/pos': typeof LoginPosRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/pos': typeof PosRoute
   '/register': typeof RegisterRoute
+  '/scanner': typeof ScannerRoute
   '/login/admin': typeof LoginAdminRoute
   '/login/dashboard': typeof LoginDashboardRoute
   '/login/pos': typeof LoginPosRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/pos': typeof PosRoute
   '/register': typeof RegisterRoute
+  '/scanner': typeof ScannerRoute
   '/login/admin': typeof LoginAdminRoute
   '/login/dashboard': typeof LoginDashboardRoute
   '/login/pos': typeof LoginPosRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/pos'
     | '/register'
+    | '/scanner'
     | '/login/admin'
     | '/login/dashboard'
     | '/login/pos'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/pos'
     | '/register'
+    | '/scanner'
     | '/login/admin'
     | '/login/dashboard'
     | '/login/pos'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/pos'
     | '/register'
+    | '/scanner'
     | '/login/admin'
     | '/login/dashboard'
     | '/login/pos'
@@ -140,6 +152,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   PosRoute: typeof PosRoute
   RegisterRoute: typeof RegisterRoute
+  ScannerRoute: typeof ScannerRoute
   LoginAdminRoute: typeof LoginAdminRoute
   LoginDashboardRoute: typeof LoginDashboardRoute
   LoginPosRoute: typeof LoginPosRoute
@@ -149,6 +162,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/scanner': {
+      id: '/scanner'
+      path: '/scanner'
+      fullPath: '/scanner'
+      preLoaderRoute: typeof ScannerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
       id: '/register'
       path: '/register'
@@ -220,6 +240,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   PosRoute: PosRoute,
   RegisterRoute: RegisterRoute,
+  ScannerRoute: ScannerRoute,
   LoginAdminRoute: LoginAdminRoute,
   LoginDashboardRoute: LoginDashboardRoute,
   LoginPosRoute: LoginPosRoute,
