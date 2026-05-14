@@ -160,26 +160,31 @@ export const getDashboardCounts = createServerFn({ method: "GET" })
     const { data: slots } = await supabase.from("slots").select("*").in("event_id", eventIds).order("starts_at");
     const result = await Promise.all(
       (slots ?? []).map(async (s) => {
-        const [active, entered, exited, autoExited, invalid] = await Promise.all([
-          supabase.from("registrations").select("*", { count: "exact", head: true }).eq("slot_id", s.id).eq("status", "active"),
-          supabase.from("registrations").select("*", { count: "exact", head: true }).eq("slot_id", s.id).eq("status", "entered"),
-          supabase.from("registrations").select("*", { count: "exact", head: true }).eq("slot_id", s.id).eq("status", "exited"),
-          supabase.from("registrations").select("*", { count: "exact", head: true }).eq("slot_id", s.id).eq("status", "auto_exited"),
+        const [activeRows, enteredRows, exitedRows, autoExitedRows, invalid] = await Promise.all([
+          supabase.from("registrations").select("guest_count").eq("slot_id", s.id).eq("status", "active"),
+          supabase.from("registrations").select("guest_count").eq("slot_id", s.id).eq("status", "entered"),
+          supabase.from("registrations").select("guest_count").eq("slot_id", s.id).eq("status", "exited"),
+          supabase.from("registrations").select("guest_count").eq("slot_id", s.id).eq("status", "auto_exited"),
           supabase.from("scan_events").select("*", { count: "exact", head: true }).eq("slot_id", s.id).eq("result", "invalid"),
         ]);
-        const used = (active.count ?? 0) + (entered.count ?? 0);
+        const sumG = (rows: any) => (rows.data ?? []).reduce((a: number, r: any) => a + (r.guest_count ?? 1), 0);
+        const active = sumG(activeRows);
+        const entered = sumG(enteredRows);
+        const exited = sumG(exitedRows);
+        const auto_exited = sumG(autoExitedRows);
+        const used = active + entered;
         return {
           id: s.id,
           name: s.name,
           starts_at: s.starts_at,
           ends_at: s.ends_at,
           capacity: s.capacity,
-          active: active.count ?? 0,
-          entered: entered.count ?? 0,
-          exited: exited.count ?? 0,
-          auto_exited: autoExited.count ?? 0,
+          active,
+          entered,
+          exited,
+          auto_exited,
           invalid: invalid.count ?? 0,
-          remaining: s.capacity - used,
+          remaining: Math.max(0, s.capacity - used),
         };
       })
     );
