@@ -22,15 +22,23 @@ export const adminUpsertEvent = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({
     id: z.string().uuid().optional(),
     name: z.string().min(1).max(120),
-    event_date: z.string(),
+    start_date: z.string(),
+    end_date: z.string(),
     is_active: z.boolean(),
   }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context.supabase, context.userId);
+    const payload = {
+      name: data.name,
+      event_date: data.start_date,
+      start_date: data.start_date,
+      end_date: data.end_date,
+      is_active: data.is_active,
+    };
     if (data.id) {
-      await context.supabase.from("events").update({ name: data.name, event_date: data.event_date, is_active: data.is_active }).eq("id", data.id);
+      await context.supabase.from("events").update(payload).eq("id", data.id);
     } else {
-      await context.supabase.from("events").insert({ name: data.name, event_date: data.event_date, is_active: data.is_active });
+      await context.supabase.from("events").insert(payload);
     }
     return { ok: true };
   });
