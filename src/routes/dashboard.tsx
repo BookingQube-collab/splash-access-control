@@ -60,12 +60,43 @@ function DashboardPage() {
         </header>
 
         {/* KPI strip */}
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Kpi icon={<Users className="h-5 w-5" />} label="Total capacity" value={totals.capacity} hue="bg-primary/15 text-primary" />
+          <Kpi icon={<Ticket className="h-5 w-5" />} label="Booked" value={totals.booked} hue="bg-sunset/15 text-sunset" />
           <Kpi icon={<LogIn className="h-5 w-5" />} label="Inside now" value={totals.inside} hue="bg-success/15 text-success" pulse />
           <Kpi icon={<Activity className="h-5 w-5" />} label="Active passes" value={totals.active} hue="bg-aqua/15 text-aqua" />
           <Kpi icon={<AlertTriangle className="h-5 w-5" />} label="Invalid scans" value={totals.invalid} hue="bg-destructive/15 text-destructive" />
         </div>
+
+        {/* Bookings chart */}
+        {slots.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+            className="mt-6 rounded-2xl glass p-5"
+          >
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="font-display text-lg font-bold">Bookings per slot</h2>
+              <span className="text-xs text-muted-foreground">Booked vs Inside vs Capacity</span>
+            </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="currentColor" strokeOpacity={0.5} />
+                  <YAxis tick={{ fontSize: 11 }} stroke="currentColor" strokeOpacity={0.5} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{ background: "hsl(var(--card, 0 0% 10%))", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, fontSize: 12 }}
+                    cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="Capacity" fill="hsl(var(--muted-foreground))" fillOpacity={0.25} radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="Booked" fill="oklch(0.78 0.16 60)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="Inside" fill="oklch(0.75 0.18 200)" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.div>
+        )}
 
         {/* Slot grid */}
         <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
