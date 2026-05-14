@@ -134,7 +134,10 @@ function PassPage() {
                     </span>
                     {cfg.icon}{cfg.label}
                   </span>
-                  <span className="text-xs text-muted-foreground">Live · auto refresh</span>
+                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className={`h-1.5 w-1.5 rounded-full ${isFetching ? "bg-aqua animate-pulse" : "bg-aqua/60"}`} />
+                    Live · {dataUpdatedAt ? format(new Date(dataUpdatedAt), "p") : "syncing"}
+                  </span>
                 </div>
 
                 {/* QR with glow */}
