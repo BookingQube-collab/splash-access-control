@@ -25,6 +25,7 @@ import {
 import { getDashboardCounts } from "@/lib/summersplash.functions";
 import { BeachBg } from "@/components/beach-bg";
 import { AnimatedCount } from "@/components/animated-count";
+import { SearchableSelect } from "@/components/searchable-select";
 
 export const Route = createFileRoute("/admin")({
   component: () => (<RoleGuard role="admin" loginPath="/login/admin"><Admin /></RoleGuard>),
