@@ -163,7 +163,7 @@ function RegisterPage() {
 
       {/* Glassmorphism modal with floating labels */}
       <Dialog open={!!slotId} onOpenChange={(v) => { if (!v) setSlotId(""); }}>
-        <DialogContent className="max-w-md border-0 bg-transparent p-0 shadow-none">
+        <DialogContent hideClose className="max-w-md border-0 bg-transparent p-0 shadow-none">
           <motion.form
             onSubmit={onSubmit}
             initial={{ scale: 0.95, opacity: 0, y: 20 }}
