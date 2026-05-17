@@ -37,13 +37,18 @@ async function loadSlots(event: { id: string; name: string; event_date: string }
     .eq("event_id", event.id)
     .order("starts_at", { ascending: true });
 
+  // Per-day capacity reset — only count registrations created today
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
   const result = await Promise.all(
     (slots ?? []).map(async (s) => {
       const { data: regs } = await supabaseAdmin
         .from("registrations")
         .select("guest_count")
         .eq("slot_id", s.id)
-        .in("status", ["active", "entered"]);
+        .in("status", ["active", "entered"])
+        .gte("created_at", dayStart.toISOString())
+        .lt("created_at", dayEnd.toISOString());
       const used = (regs ?? []).reduce((sum, r: any) => sum + (r.guest_count ?? 1), 0);
       return { ...s, registered: used, remaining: Math.max(0, s.capacity - used) };
     })
@@ -51,13 +56,17 @@ async function loadSlots(event: { id: string; name: string; event_date: string }
   return { event, slots: result };
 }
 
-// Sum of guest_count for a slot in active/entered status
+// Sum of guest_count for a slot in active/entered status — today only (per-day capacity)
 async function sumGuests(client: any, slotId: string) {
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
   const { data } = await client
     .from("registrations")
     .select("guest_count")
     .eq("slot_id", slotId)
-    .in("status", ["active", "entered"]);
+    .in("status", ["active", "entered"])
+    .gte("created_at", dayStart.toISOString())
+    .lt("created_at", dayEnd.toISOString());
   return (data ?? []).reduce((sum: number, r: any) => sum + (r.guest_count ?? 1), 0);
 }
 
