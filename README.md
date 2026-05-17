@@ -37,8 +37,21 @@ Standalone Next.js app for **E3 Summer Splash** event registration, QR passes, a
 
 ## Deploy (Vercel)
 
+1. Vercel → your project → **Settings** → **Environment Variables**
+2. Add **all** variables from `.env.example` for **Production**, **Preview**, and **Development**
+3. **Redeploy** after saving (required — `NEXT_PUBLIC_*` values are baked in at build time)
+
+| Variable | Required for |
+|----------|----------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Browser + build |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser + build |
+| `SUPABASE_URL` | Server actions |
+| `SUPABASE_PUBLISHABLE_KEY` | Server actions |
+| `SUPABASE_SERVICE_ROLE_KEY` | Admin user create/list |
+
 - Framework preset: **Next.js**
-- Set the same env vars as in `.env.example` in the Vercel project settings.
+- Install command: `npm install`
+- Build command: `npm run build`
 
 ## Scripts
 

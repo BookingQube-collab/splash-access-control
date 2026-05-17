@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { getAuthContext } from "@/lib/server-auth";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { getSupabaseAdminClientOrNull, supabaseAdmin } from "@/integrations/supabase/client.server";
 
 async function assertAdmin(supabase: Awaited<ReturnType<typeof getAuthContext>>["supabase"], userId: string) {
   const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle();
@@ -175,43 +175,89 @@ export async function adminSaveSettings(input: { scandit_api_key?: string | null
 
 // ===== Users / roles =====
 export async function adminListUsers() {
-  await adminContext();
-  const { data: authList } = await supabaseAdmin.auth.admin.listUsers({ perPage: 200 });
-  const users = authList?.users ?? [];
-  const { data: rolesData } = await supabaseAdmin.from("user_roles").select("user_id, role");
+  const { supabase } = await adminContext();
+  const admin = getSupabaseAdminClientOrNull();
+
+  type ListedUser = { id: string; email: string; created_at: string };
+  let users: ListedUser[] = [];
+
+  if (admin) {
+    const { data: authList, error: listError } = await admin.auth.admin.listUsers({ perPage: 200 });
+    if (listError) throw new Error(listError.message);
+    users = (authList?.users ?? []).map((u) => ({
+      id: u.id,
+      email: u.email ?? "",
+      created_at: u.created_at ?? new Date().toISOString(),
+    }));
+  }
+
+  // Fallback when service role key is missing: read profiles (admin RLS allows all rows)
+  if (users.length === 0) {
+    const { data: profiles, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, email, created_at")
+      .order("created_at", { ascending: false });
+    if (profileError) throw new Error(profileError.message);
+    users = (profiles ?? []).map((p) => ({
+      id: p.id,
+      email: p.email ?? "",
+      created_at: p.created_at,
+    }));
+  }
+
+  const { data: rolesData, error: rolesError } = await supabase.from("user_roles").select("user_id, role");
+  if (rolesError) throw new Error(rolesError.message);
+
   const rolesByUser: Record<string, string[]> = {};
   (rolesData ?? []).forEach((r: { user_id: string; role: string }) => {
     rolesByUser[r.user_id] = [...(rolesByUser[r.user_id] ?? []), r.role];
   });
+
   return {
     users: users.map((u) => ({
-      id: u.id,
-      email: u.email ?? "",
-      created_at: u.created_at,
+      ...u,
       roles: rolesByUser[u.id] ?? [],
     })),
   };
 }
+
+const createUserSchema = z.object({
+  email: z.string().trim().email("Enter a valid email"),
+  password: z.string().min(6, "Password must be at least 6 characters").max(72),
+  role: z.enum(["admin", "dashboard", "pos", "scanner"]),
+});
 
 export async function adminCreateUser(input: {
   email: string;
   password: string;
   role: "admin" | "dashboard" | "pos" | "scanner";
 }) {
-  const data = z.object({
-    email: z.string().email(),
-    password: z.string().min(6).max(72),
-    role: z.enum(["admin", "dashboard", "pos", "scanner"]),
-  }).parse(input);
-  await adminContext();
-  const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
+  const parsed = createUserSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new Error(parsed.error.errors.map((e) => e.message).join(". "));
+  }
+  const data = parsed.data;
+  const { supabase } = await adminContext();
+  const admin = getSupabaseAdminClientOrNull();
+  if (!admin) {
+    throw new Error(
+      "Cannot create users without SUPABASE_SERVICE_ROLE_KEY. Add the secret key from Supabase → Settings → API to .env, then restart the dev server.",
+    );
+  }
+
+  const { data: created, error } = await admin.auth.admin.createUser({
     email: data.email,
     password: data.password,
     email_confirm: true,
   });
   if (error || !created.user) throw new Error(error?.message || "Failed to create user");
-  await supabaseAdmin.from("user_roles").insert({ user_id: created.user.id, role: data.role });
-  return { ok: true };
+
+  const { error: roleError } = await supabase
+    .from("user_roles")
+    .insert({ user_id: created.user.id, role: data.role });
+  if (roleError) throw new Error(roleError.message);
+
+  return { ok: true, user_id: created.user.id };
 }
 
 export async function adminSetRole(input: {

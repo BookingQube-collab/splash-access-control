@@ -1,13 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ScanLine, ShieldCheck, Monitor, Store, Sparkles, Sun, Waves, ArrowRight } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
 import { format } from "date-fns";
 
+/** Fixed QR-style decoration — must not use Math.random() (hydration mismatch). */
+const QR_MOCK_CELLS = Array.from({ length: 36 }, (_, i) => ((i * 17 + 7) % 23) > 10);
+
 export default function IndexPage() {
-  const today = format(new Date(), "EEEE · MMMM d, yyyy");
+  const [today, setToday] = useState("");
+
+  useEffect(() => {
+    setToday(format(new Date(), "EEEE · MMMM d, yyyy"));
+  }, []);
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -99,8 +107,8 @@ export default function IndexPage() {
                 </div>
                 <div className="mt-5 grid h-40 place-items-center rounded-2xl bg-foreground/5">
                   <div className="grid h-28 w-28 grid-cols-6 grid-rows-6 gap-0.5">
-                    {Array.from({ length: 36 }).map((_, i) => (
-                      <div key={i} className={`rounded-sm ${Math.random() > 0.45 ? "bg-foreground" : "bg-transparent"}`} />
+                    {QR_MOCK_CELLS.map((filled, i) => (
+                      <div key={i} className={`rounded-sm ${filled ? "bg-foreground" : "bg-transparent"}`} />
                     ))}
                   </div>
                 </div>

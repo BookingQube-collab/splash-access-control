@@ -27,6 +27,7 @@ import { getDashboardCounts } from "@/lib/summersplash.functions";
 import { BeachBg } from "@/components/beach-bg";
 import { AnimatedCount } from "@/components/animated-count";
 import { SearchableSelect } from "@/components/searchable-select";
+import { formatActionError } from "@/lib/utils";
 
 export default function AdminPage() {
   return (
@@ -488,12 +489,20 @@ function BigStat({ label, value, danger }: { label: string; value: number | stri
 
 function UsersTab() {
   const qc = useQueryClient();
-  const { data } = useQuery({ queryKey: ["a-users"], queryFn: () => adminListUsers() });
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ["a-users"],
+    queryFn: () => adminListUsers(),
+  });
   const [email, setEmail] = useState(""); const [pw, setPw] = useState("");
   const [role, setRoleV] = useState<"admin" | "dashboard" | "pos" | "scanner">("scanner");
   const allRoles: ("admin" | "dashboard" | "pos" | "scanner")[] = ["admin", "dashboard", "pos", "scanner"];
   return (
     <Panel title="Users & Roles">
+      {isError && (
+        <p className="mb-4 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {formatActionError(error)}
+        </p>
+      )}
       <div className="mb-5 grid gap-2 md:grid-cols-4">
         <Input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-11 border-0 bg-foreground/5" />
         <Input placeholder="Password" type="password" value={pw} onChange={(e) => setPw(e.target.value)} className="h-11 border-0 bg-foreground/5" />
@@ -503,9 +512,38 @@ function UsersTab() {
           searchable={false}
           options={allRoles.map((r) => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
         />
-        <button onClick={async () => { try { await adminCreateUser({ email, password: pw, role }); toast.success("Created"); setEmail(""); setPw(""); qc.invalidateQueries({ queryKey: ["a-users"] }); } catch (e: any) { toast.error(e.message); } }}
-          className="rounded-xl bg-aqua text-sm font-semibold text-primary-foreground shadow-glow-aqua">Create user</button>
+        <button
+          onClick={async () => {
+            const trimmedEmail = email.trim();
+            if (!trimmedEmail) {
+              toast.error("Email is required");
+              return;
+            }
+            if (pw.length < 6) {
+              toast.error("Password must be at least 6 characters");
+              return;
+            }
+            try {
+              await adminCreateUser({ email: trimmedEmail, password: pw, role });
+              toast.success("User created");
+              setEmail("");
+              setPw("");
+              await refetch();
+            } catch (e: unknown) {
+              toast.error(formatActionError(e));
+            }
+          }}
+          className="rounded-xl bg-aqua text-sm font-semibold text-primary-foreground shadow-glow-aqua"
+        >
+          Create user
+        </button>
       </div>
+      {isLoading && <p className="py-6 text-center text-sm text-muted-foreground">Loading users…</p>}
+      {!isLoading && !isError && (data?.users ?? []).length === 0 && (
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          No users yet. Add SUPABASE_SERVICE_ROLE_KEY to .env to create users, then restart the dev server.
+        </p>
+      )}
       <div className="space-y-2">
         {(data?.users ?? []).map((u: any) => (
           <div key={u.id} className="rounded-2xl glass p-4">
