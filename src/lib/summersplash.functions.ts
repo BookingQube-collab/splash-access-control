@@ -86,6 +86,7 @@ const registerSchema = z.object({
   mobile: z.string().trim().min(7).max(20),
   email: z.string().trim().email().max(255).optional().or(z.literal("")),
   guest_count: z.number().int().min(1).max(20),
+  booking_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export const publicRegister = createServerFn({ method: "POST" })
