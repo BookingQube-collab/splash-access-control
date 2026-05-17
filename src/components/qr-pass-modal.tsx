@@ -1,8 +1,10 @@
+"use client";
+
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { QRCodeSVG } from "qrcode.react";
 import { motion } from "framer-motion";
 import { Sparkles, Printer, ExternalLink, X, Share2 } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import Link from "next/link";
 import { toast } from "sonner";
 
 export function QrPassModal({
@@ -70,8 +72,7 @@ export function QrPassModal({
           )}
 
           <Link
-            to="/pass/$token"
-            params={{ token }}
+            href={`/pass/${token}`}
             target="_blank"
             className="relative mt-5 grid place-items-center rounded-2xl bg-white p-5 transition hover:scale-[1.01]"
           >
@@ -81,8 +82,7 @@ export function QrPassModal({
 
           {/* Primary: open the full digital pass page (reprint + share source) */}
           <Link
-            to="/pass/$token"
-            params={{ token }}
+            href={`/pass/${token}`}
             target="_blank"
             className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-sunset py-3 text-sm font-semibold text-foreground shadow-glow-sunset transition hover:brightness-110"
           >

@@ -1,6 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RoleGuard } from "@/components/role-guard";
@@ -23,12 +25,13 @@ import { BeachBg } from "@/components/beach-bg";
 import { QrPassModal } from "@/components/qr-pass-modal";
 import { Html5Qrcode } from "html5-qrcode";
 import { useAuth } from "@/hooks/use-auth";
-import { useNavigate } from "@tanstack/react-router";
-
-export const Route = createFileRoute("/pos")({
-  ssr: false,
-  component: () => (<RoleGuard role="pos" loginPath="/login/pos" bare><POS /></RoleGuard>),
-});
+export default function POSPage() {
+  return (
+    <RoleGuard role="pos" loginPath="/login/pos" bare>
+      <POS />
+    </RoleGuard>
+  );
+}
 
 type Registration = {
   id: string; customer_name: string; mobile: string; email?: string | null; guest_count: number;
@@ -37,15 +40,11 @@ type Registration = {
 };
 
 function POS() {
-  const fetchEvent = useServerFn(getPublicEvent);
-  const register = useServerFn(posRegister);
-  const search = useServerFn(searchByMobile);
-  const lookupToken = useServerFn(lookupByToken);
   const { signOut } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
   const [bookingDate, setBookingDate] = useState<string | undefined>(undefined);
   const { data, refetch } = useQuery({
-    queryKey: ["pos-event", bookingDate ?? "auto"], queryFn: () => fetchEvent({ data: bookingDate ? { date: bookingDate } : {} }),
+    queryKey: ["pos-event", bookingDate ?? "auto"], queryFn: () => getPublicEvent(bookingDate ? { date: bookingDate } : {}),
     refetchInterval: 5000, refetchOnWindowFocus: true,
   });
   const activeDate = data?.bookingDate;
@@ -75,7 +74,7 @@ function POS() {
     if (!text) return;
     const tokenMatch = text.match(/[0-9a-fA-F-]{36}/);
     if (tokenMatch) {
-      lookupToken({ data: { token: tokenMatch[0] } }).then((r) => {
+      lookupByToken({ token: tokenMatch[0] }).then((r) => {
         if (r?.result) {
           applyCustomer(r.result as Registration);
         } else {
@@ -112,7 +111,7 @@ function POS() {
             const raw = decoded.trim();
             const tokenMatch = raw.match(/[0-9a-fA-F-]{36}/);
             if (tokenMatch) {
-              lookupToken({ data: { token: tokenMatch[0] } }).then((r) => {
+              lookupByToken({ token: tokenMatch[0] }).then((r) => {
                 if (r?.result) {
                   applyCustomer(r.result as Registration);
                   toast.success(`Loaded ${(r.result as Registration).customer_name}`);
@@ -145,13 +144,13 @@ function POS() {
     setLookupBusy(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        const r = await search({ data: { mobile: q } });
+        const r = await searchByMobile({ mobile: q });
         setLookupResults((r.results ?? []) as Registration[]);
         setLookupOpen(true);
       } catch { /* ignore */ } finally { setLookupBusy(false); }
     }, 250);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [mobile, search]);
+  }, [mobile]);
 
   const applyCustomer = (r: Registration) => {
     setName(r.customer_name);
@@ -196,11 +195,11 @@ function POS() {
     if (!slot) return;
     setSubmitting(true);
     try {
-      const res = await register({ data: {
+      const res = await posRegister({
         slot_id: slot.id, customer_name: name.trim(), mobile: mobile.trim(),
         email: email.trim(), guest_count: guests,
         booking_date: activeDate,
-      } });
+      });
       setLastToken(res.qr_token);
       setModalMeta({ name: name.trim(), slot: slot.name, guests });
       setConfirmOpen(false);
@@ -252,7 +251,7 @@ function POS() {
             </button>
             <button
               type="button"
-              onClick={async () => { await signOut(); navigate({ to: "/login/pos" }); }}
+              onClick={async () => { await signOut(); router.push("/login/pos"); }}
               title="Sign out"
               className="inline-flex items-center gap-1.5 rounded-full bg-foreground/5 px-3 py-1.5 text-[11px] font-bold text-foreground/80 ring-1 ring-foreground/10 transition hover:bg-coral/15 hover:text-coral hover:ring-coral/30"
             >
@@ -511,7 +510,7 @@ function POS() {
                         }} className="inline-flex items-center gap-1 rounded-lg bg-aqua/15 px-2.5 py-1.5 text-[11px] font-semibold text-aqua hover:bg-aqua/25">
                           <QrCode className="h-3.5 w-3.5" /> Reprint
                         </button>
-                        <Link to="/pass/$token" params={{ token: r.qr_token }} target="_blank"
+                        <Link href={`/pass/${r.qr_token}`} target="_blank"
                           className="inline-flex items-center gap-1 rounded-lg bg-primary/15 px-2 py-1.5 text-[11px] font-semibold text-primary">
                           <ExternalLink className="h-3.5 w-3.5" />
                         </Link>

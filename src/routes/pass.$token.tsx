@@ -1,6 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+"use client";
+
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { QRCodeSVG } from "qrcode.react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,18 +12,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Waves, CheckCircle2, XCircle, LogIn, LogOut, Sun, Users, Hash } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
 
-export const Route = createFileRoute("/pass/$token")({
-  head: () => ({ meta: [{ title: "Your SummerSplash pass" }] }),
-  component: PassPage,
-});
+export default function PassPage() {
+  const params = useParams<{ token?: string | string[] }>();
+  const raw = params.token;
+  const token = typeof raw === "string" ? raw : raw?.[0] ?? "";
 
-function PassPage() {
-  const { token } = Route.useParams();
-  const fetchPass = useServerFn(getPass);
   const qc = useQueryClient();
   const { data, isLoading, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ["pass", token],
-    queryFn: () => fetchPass({ data: { token } }),
+    queryFn: () => getPass({ token }),
+    enabled: !!token,
     refetchInterval: 5000,
     refetchIntervalInBackground: true,
   });
@@ -47,6 +47,18 @@ function PassPage() {
     };
   }, [data?.id, token, qc]);
 
+  if (!token)
+    return (
+      <div className="relative grid min-h-screen place-items-center px-4">
+        <BeachBg variant="sunset" />
+        <div className="rounded-3xl glass-strong p-10 text-center">
+          <XCircle className="mx-auto h-12 w-12 text-destructive" />
+          <p className="mt-4 font-semibold">Invalid pass link</p>
+          <Link href="/" className="mt-4 inline-block text-sm text-primary underline">Go home</Link>
+        </div>
+      </div>
+    );
+
   if (isLoading)
     return (
       <div className="relative grid min-h-screen place-items-center">
@@ -61,7 +73,7 @@ function PassPage() {
         <div className="rounded-3xl glass-strong p-10 text-center">
           <XCircle className="mx-auto h-12 w-12 text-destructive" />
           <p className="mt-4 font-semibold">Pass not found</p>
-          <Link to="/" className="mt-4 inline-block text-sm text-primary underline">Go home</Link>
+          <Link href="/" className="mt-4 inline-block text-sm text-primary underline">Go home</Link>
         </div>
       </div>
     );
@@ -78,7 +90,7 @@ function PassPage() {
     <div className="relative min-h-screen px-4 py-8">
       <BeachBg variant="sunset" />
 
-      <Link to="/" className="relative z-10 mx-auto mb-6 flex max-w-md items-center justify-center gap-2">
+      <Link href="/" className="relative z-10 mx-auto mb-6 flex max-w-md items-center justify-center gap-2">
         <Waves className="h-5 w-5 text-primary" />
         <span className="font-display text-base font-bold">SummerSplash</span>
       </Link>

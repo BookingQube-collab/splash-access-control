@@ -1,12 +1,16 @@
-import { createServerFn } from "@tanstack/react-start";
+"use server";
+
 import { z } from "zod";
+import { getAuthContext } from "@/lib/server-auth";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
+const publicEventSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
 
 // ============ PUBLIC: list current event + slots with remaining capacity ============
-export const getPublicEvent = createServerFn({ method: "GET" })
-  .inputValidator((d: unknown) => z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).parse(d ?? {}))
-  .handler(async ({ data }) => {
+export async function getPublicEvent(input?: { date?: string }) {
+  const data = publicEventSchema.parse(input ?? {});
     const today = new Date().toISOString().slice(0, 10);
     // 1) prefer an active event whose date range covers today
     const { data: live } = await supabaseAdmin
@@ -30,7 +34,7 @@ export const getPublicEvent = createServerFn({ method: "GET" })
       .maybeSingle();
     if (!fallback) return { event: null, slots: [], bookingDate: data.date ?? today, daySales: 0 };
     return loadSlots(fallback, data.date);
-  });
+}
 
 async function loadSlots(event: { id: string; name: string; event_date: string; start_date: string; end_date: string }, bookingDate?: string) {
   const { data: slots } = await supabaseAdmin
@@ -89,9 +93,8 @@ const registerSchema = z.object({
   booking_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
-export const publicRegister = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => registerSchema.parse(d))
-  .handler(async ({ data }) => {
+export async function publicRegister(input: z.infer<typeof registerSchema>) {
+  const data = registerSchema.parse(input);
     // capacity check
     const { data: slot } = await supabaseAdmin.from("slots").select("*").eq("id", data.slot_id).maybeSingle();
     if (!slot) throw new Error("Slot not found");
@@ -127,12 +130,11 @@ export const publicRegister = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
     return { id: reg.id, qr_token: reg.qr_token };
-  });
+}
 
 // ============ PUBLIC: get pass by token ============
-export const getPass = createServerFn({ method: "GET" })
-  .inputValidator((d: unknown) => z.object({ token: z.string().uuid() }).parse(d))
-  .handler(async ({ data }) => {
+export async function getPass(input: { token: string }) {
+  const data = z.object({ token: z.string().uuid() }).parse(input);
     const { data: reg } = await supabaseAdmin
       .from("registrations")
       .select("*, slots(*, events(*))")
@@ -166,14 +168,12 @@ export const getPass = createServerFn({ method: "GET" })
       event_name: slot.events.name,
       event_date: slot.events.event_date,
     };
-  });
+}
 
 // ============ STAFF: dashboard counts ============
-export const getDashboardCounts = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ eventId: z.string().uuid().optional() }).parse(d ?? {}))
-  .handler(async ({ data, context }) => {
-    const { supabase } = context;
+export async function getDashboardCounts(input?: { eventId?: string }) {
+  const data = z.object({ eventId: z.string().uuid().optional() }).parse(input ?? {});
+  const { supabase } = await getAuthContext();
     const today = new Date().toISOString().slice(0, 10);
     // All active events (for filter dropdown)
     const { data: allEvents } = await supabase
@@ -241,7 +241,7 @@ export const getDashboardCounts = createServerFn({ method: "GET" })
       })
     );
     return { events: eventsOut, slots: result, selectedEventId: data.eventId ?? evs[0]?.id ?? null };
-  });
+}
 
 // ============ SCANNER ============
 const scanSchema = z.object({
@@ -249,11 +249,9 @@ const scanSchema = z.object({
   mode: z.enum(["entry", "exit"]),
 });
 
-export const scanQR = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => scanSchema.parse(d))
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+export async function scanQR(input: z.infer<typeof scanSchema>) {
+  const data = scanSchema.parse(input);
+  const { supabase, userId } = await getAuthContext();
     // try to parse as uuid
     const tokenMatch = data.qr_token.match(/[0-9a-fA-F-]{36}/);
     const token = tokenMatch ? tokenMatch[0] : data.qr_token;
@@ -297,25 +295,23 @@ export const scanQR = createServerFn({ method: "POST" })
       await supabase.from("scan_events").insert({ registration_id: reg.id, slot_id: slot.id, mode: "exit", result: "valid", scanner_user_id: userId });
       return { valid: true, reason: "Exit recorded", customer: reg.customer_name };
     }
-  });
+}
 
-export const getScanditConfig = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data } = await context.supabase.from("app_settings").select("scandit_enabled, scandit_api_key").eq("id", 1).maybeSingle();
-    return { enabled: !!data?.scandit_enabled, key: data?.scandit_api_key ?? "" };
-  });
+export async function getScanditConfig() {
+  const { supabase } = await getAuthContext();
+  const { data } = await supabase.from("app_settings").select("scandit_enabled, scandit_api_key").eq("id", 1).maybeSingle();
+  return { enabled: !!data?.scandit_enabled, key: data?.scandit_api_key ?? "" };
+}
 
 // ============ POS ============
-export const posRegister = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => registerSchema.parse(d))
-  .handler(async ({ data, context }) => {
-    const { data: slot } = await context.supabase.from("slots").select("*").eq("id", data.slot_id).maybeSingle();
+export async function posRegister(input: z.infer<typeof registerSchema>) {
+  const data = registerSchema.parse(input);
+  const { supabase } = await getAuthContext();
+  const { data: slot } = await supabase.from("slots").select("*").eq("id", data.slot_id).maybeSingle();
     if (!slot) throw new Error("Slot not found");
     // dedup: same slot + mobile within last 30s — return existing
     const since = new Date(Date.now() - 30_000).toISOString();
-    const { data: dupe } = await context.supabase
+    const { data: dupe } = await supabase
       .from("registrations")
       .select("id, qr_token")
       .eq("slot_id", data.slot_id)
@@ -328,13 +324,13 @@ export const posRegister = createServerFn({ method: "POST" })
 
     const today = new Date().toISOString().slice(0, 10);
     const bookingDate = data.booking_date && data.booking_date !== today ? data.booking_date : undefined;
-    const used = await sumGuests(context.supabase, data.slot_id, bookingDate ?? today);
+    const used = await sumGuests(supabase, data.slot_id, bookingDate ?? today);
     if (used + data.guest_count > slot.capacity) throw new Error("Slot is full");
 
     // For advance/back-dated bookings, anchor created_at to noon of that date (keeps per-day capacity correct)
     const createdAt = bookingDate ? new Date(`${bookingDate}T12:00:00`).toISOString() : new Date().toISOString();
 
-    const { data: reg, error } = await context.supabase.from("registrations").insert({
+    const { data: reg, error } = await supabase.from("registrations").insert({
       slot_id: data.slot_id,
       customer_name: data.customer_name,
       mobile: data.mobile,
@@ -344,39 +340,36 @@ export const posRegister = createServerFn({ method: "POST" })
     }).select("id, qr_token").single();
     if (error) throw new Error(error.message);
     return { id: reg.id, qr_token: reg.qr_token };
-  });
+}
 
-export const searchByMobile = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ mobile: z.string().min(3).max(20) }).parse(d))
-  .handler(async ({ data, context }) => {
-    const { data: regs } = await context.supabase
+export async function searchByMobile(input: { mobile: string }) {
+  const data = z.object({ mobile: z.string().min(3).max(20) }).parse(input);
+  const { supabase } = await getAuthContext();
+  const { data: regs } = await supabase
       .from("registrations")
       .select("id, customer_name, mobile, email, guest_count, qr_token, status, created_at, slots(name, starts_at)")
       .ilike("mobile", `%${data.mobile}%`)
       .order("created_at", { ascending: false })
       .limit(20);
     return { results: regs ?? [] };
-  });
+}
 
-export const lookupByToken = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ token: z.string().min(1).max(300) }).parse(d))
-  .handler(async ({ data, context }) => {
-    const m = data.token.match(/[0-9a-fA-F-]{36}/);
-    const token = m ? m[0] : data.token;
-    const { data: reg } = await context.supabase
+export async function lookupByToken(input: { token: string }) {
+  const data = z.object({ token: z.string().min(1).max(300) }).parse(input);
+  const { supabase } = await getAuthContext();
+  const m = data.token.match(/[0-9a-fA-F-]{36}/);
+  const token = m ? m[0] : data.token;
+  const { data: reg } = await supabase
       .from("registrations")
       .select("id, customer_name, mobile, email, guest_count, qr_token, status, created_at, slots(name, starts_at)")
       .eq("qr_token", token)
       .maybeSingle();
     return { result: reg ?? null };
-  });
+}
 
 // ============ PUBLIC: list all passes by mobile number ============
-export const getMyPasses = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ mobile: z.string().trim().min(7).max(20) }).parse(d))
-  .handler(async ({ data }) => {
+export async function getMyPasses(input: { mobile: string }) {
+  const data = z.object({ mobile: z.string().trim().min(7).max(20) }).parse(input);
     const { data: regs } = await supabaseAdmin
       .from("registrations")
       .select("id, customer_name, mobile, email, guest_count, qr_token, status, created_at, entered_at, exited_at, slots(name, starts_at, ends_at, events(name, event_date))")
@@ -402,4 +395,4 @@ export const getMyPasses = createServerFn({ method: "POST" })
       };
     });
     return { passes: list };
-  });
+}

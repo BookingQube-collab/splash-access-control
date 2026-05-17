@@ -1,5 +1,8 @@
+"use client";
+
 import { useState } from "react";
-import { useNavigate, Link } from "@tanstack/react-router";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -17,7 +20,7 @@ interface RoleLoginProps {
 }
 
 export function RoleLogin({ role, title, subtitle, redirectTo }: RoleLoginProps) {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -40,14 +43,14 @@ export function RoleLogin({ role, title, subtitle, redirectTo }: RoleLoginProps)
       return;
     }
     toast.success("Signed in");
-    navigate({ to: redirectTo });
+    router.push(redirectTo);
   };
 
   return (
     <div className="relative grid min-h-screen place-items-center px-4">
       <BeachBg variant="aurora" />
 
-      <Link to="/" className="absolute left-6 top-6 z-10 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+      <Link href="/" className="absolute left-6 top-6 z-10 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Home
       </Link>
 

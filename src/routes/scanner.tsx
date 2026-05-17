@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
+"use client";
+
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RoleGuard } from "@/components/role-guard";
@@ -8,13 +8,15 @@ import { CheckCircle2, XCircle, Camera, Keyboard, ScanLine, LogIn, LogOut } from
 import { Html5Qrcode } from "html5-qrcode";
 import { BeachBg } from "@/components/beach-bg";
 
-export const Route = createFileRoute("/scanner")({
-  component: () => (<RoleGuard role="scanner" loginPath="/login/scanner"><Scanner /></RoleGuard>),
-});
+export default function ScannerPage() {
+  return (
+    <RoleGuard role="scanner" loginPath="/login/scanner">
+      <Scanner />
+    </RoleGuard>
+  );
+}
 
 function Scanner() {
-  const scan = useServerFn(scanQR);
-  const getCfg = useServerFn(getScanditConfig);
   const [mode, setMode] = useState<"entry" | "exit">("entry");
   const [result, setResult] = useState<{ valid: boolean; reason: string; customer?: string } | null>(null);
   const [cameraOn, setCameraOn] = useState(false);
@@ -23,14 +25,14 @@ function Scanner() {
   const html5Ref = useRef<Html5Qrcode | null>(null);
   const lastScanned = useRef<{ token: string; t: number } | null>(null);
 
-  useEffect(() => { getCfg().then((c) => setScanditEnabled(c.enabled)); }, [getCfg]);
+  useEffect(() => { getScanditConfig().then((c) => setScanditEnabled(c.enabled)); }, []);
 
   const handleToken = async (token: string) => {
     const now = Date.now();
     if (lastScanned.current && lastScanned.current.token === token && now - lastScanned.current.t < 2500) return;
     lastScanned.current = { token, t: now };
     try {
-      const r = await scan({ data: { qr_token: token, mode } });
+      const r = await scanQR({ qr_token: token, mode });
       setResult(r);
       setTimeout(() => setResult(null), 1800);
     } catch (e: any) {

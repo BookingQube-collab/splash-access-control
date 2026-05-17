@@ -1,4 +1,7 @@
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+"use client";
+
+import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth, type AppRole } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -13,14 +16,14 @@ export function RoleGuard({ role, loginPath, children, nav, bare }: {
   bare?: boolean;
 }) {
   const { loading, session, hasRole, signOut } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (loading) return;
-    if (!session) navigate({ to: loginPath });
-    else if (!hasRole(role)) navigate({ to: loginPath });
-  }, [loading, session, hasRole, role, loginPath, navigate, location.pathname]);
+    if (!session) router.push(loginPath);
+    else if (!hasRole(role)) router.push(loginPath);
+  }, [loading, session, hasRole, role, loginPath, router, pathname]);
 
   if (loading || !session || !hasRole(role)) {
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Checking access…</div>;
@@ -32,13 +35,13 @@ export function RoleGuard({ role, loginPath, children, nav, bare }: {
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
-          <Link to="/" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <Waves className="h-5 w-5 text-primary" />
             <span className="font-display font-bold">SummerSplash</span>
           </Link>
           <div className="flex items-center gap-2">
             {nav}
-            <Button variant="ghost" size="sm" onClick={async () => { await signOut(); navigate({ to: loginPath }); }}>
+            <Button variant="ghost" size="sm" onClick={async () => { await signOut(); router.push(loginPath); }}>
               <LogOut className="mr-1 h-4 w-4" /> Sign out
             </Button>
           </div>

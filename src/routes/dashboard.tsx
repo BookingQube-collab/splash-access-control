@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+"use client";
+
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { RoleGuard } from "@/components/role-guard";
@@ -10,17 +10,16 @@ import { Activity, Users, LogIn, LogOut, AlertTriangle, Clock, TrendingUp, Ticke
 import { BeachBg } from "@/components/beach-bg";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
 
-export const Route = createFileRoute("/dashboard")({
-  component: () => (
+export default function DashboardPage() {
+  return (
     <RoleGuard role="dashboard" loginPath="/login/dashboard">
-      <DashboardPage />
+      <DashboardContent />
     </RoleGuard>
-  ),
-});
+  );
+}
 
-function DashboardPage() {
-  const fn = useServerFn(getDashboardCounts);
-  const { data } = useQuery({ queryKey: ["dash"], queryFn: () => fn(), refetchInterval: 5000 });
+function DashboardContent() {
+  const { data } = useQuery({ queryKey: ["dash"], queryFn: () => getDashboardCounts(), refetchInterval: 5000 });
 
   const slots = data?.slots ?? [];
   const totals = slots.reduce(

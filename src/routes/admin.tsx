@@ -1,6 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+"use client";
+
+import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RoleGuard } from "@/components/role-guard";
@@ -27,9 +28,13 @@ import { BeachBg } from "@/components/beach-bg";
 import { AnimatedCount } from "@/components/animated-count";
 import { SearchableSelect } from "@/components/searchable-select";
 
-export const Route = createFileRoute("/admin")({
-  component: () => (<RoleGuard role="admin" loginPath="/login/admin"><Admin /></RoleGuard>),
-});
+export default function AdminPage() {
+  return (
+    <RoleGuard role="admin" loginPath="/login/admin">
+      <Admin />
+    </RoleGuard>
+  );
+}
 
 type TabKey = "overview" | "events" | "slots" | "registrations" | "reports" | "users" | "settings";
 
@@ -104,8 +109,8 @@ function Admin() {
               ))}
             </div>
             <div className="hidden items-center gap-2 lg:flex">
-              <Link to="/dashboard" className="rounded-lg glass px-3 py-1.5 text-xs font-semibold hover-glow">Live dashboard</Link>
-              <Link to="/scanner" className="inline-flex items-center gap-1.5 rounded-lg glass px-3 py-1.5 text-xs font-semibold hover-glow">
+              <Link href="/dashboard" className="rounded-lg glass px-3 py-1.5 text-xs font-semibold hover-glow">Live dashboard</Link>
+              <Link href="/scanner" className="inline-flex items-center gap-1.5 rounded-lg glass px-3 py-1.5 text-xs font-semibold hover-glow">
                 <ScanLine className="h-3 w-3" /> Scanner
               </Link>
             </div>
@@ -142,15 +147,14 @@ function Panel({ title, action, children }: { title: string; action?: React.Reac
 }
 
 function EventsTab() {
-  const list = useServerFn(adminListEvents); const upsert = useServerFn(adminUpsertEvent); const del = useServerFn(adminDeleteEvent);
   const qc = useQueryClient();
-  const { data } = useQuery({ queryKey: ["a-events"], queryFn: () => list() });
+  const { data } = useQuery({ queryKey: ["a-events"], queryFn: () => adminListEvents() });
   const today = new Date().toISOString().slice(0, 10);
   const [name, setName] = useState("SummerSplash");
   const [start, setStart] = useState(today);
   const [end, setEnd] = useState(today);
   const m = useMutation({
-    mutationFn: () => upsert({ data: { name, start_date: start, end_date: end, is_active: true } }),
+    mutationFn: () => adminUpsertEvent({ name, start_date: start, end_date: end, is_active: true }),
     onSuccess: () => { toast.success("Event saved"); qc.invalidateQueries({ queryKey: ["a-events"] }); }
   });
   return (
@@ -183,9 +187,9 @@ function EventsTab() {
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={async () => { await upsert({ data: { id: e.id, name: e.name, start_date: e.start_date ?? e.event_date, end_date: e.end_date ?? e.event_date, is_active: !e.is_active } }); qc.invalidateQueries({ queryKey: ["a-events"] }); }}
+              <button onClick={async () => { await adminUpsertEvent({ id: e.id, name: e.name, start_date: e.start_date ?? e.event_date, end_date: e.end_date ?? e.event_date, is_active: !e.is_active }); qc.invalidateQueries({ queryKey: ["a-events"] }); }}
                 className="rounded-lg glass px-3 py-1.5 text-xs font-semibold hover-glow">{e.is_active ? "Deactivate" : "Activate"}</button>
-              <button onClick={async () => { if (confirm("Delete?")) { await del({ data: { id: e.id } }); qc.invalidateQueries({ queryKey: ["a-events"] }); } }}
+              <button onClick={async () => { if (confirm("Delete?")) { await adminDeleteEvent({ id: e.id }); qc.invalidateQueries({ queryKey: ["a-events"] }); } }}
                 className="rounded-lg bg-destructive/15 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/25">
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -201,11 +205,9 @@ function EventsTab() {
 
 
 function SlotsTab() {
-  const listE = useServerFn(adminListEvents); const list = useServerFn(adminListSlots);
-  const upsert = useServerFn(adminUpsertSlot); const del = useServerFn(adminDeleteSlot);
   const qc = useQueryClient();
-  const { data: events } = useQuery({ queryKey: ["a-events"], queryFn: () => listE() });
-  const { data } = useQuery({ queryKey: ["a-slots"], queryFn: () => list() });
+  const { data: events } = useQuery({ queryKey: ["a-events"], queryFn: () => adminListEvents() });
+  const { data } = useQuery({ queryKey: ["a-slots"], queryFn: () => adminListSlots() });
 
   const [eventId, setEventId] = useState("");
   const [name, setName] = useState("");
@@ -232,7 +234,7 @@ function SlotsTab() {
     try {
       const starts_at = new Date(`${startDate}T${startTime}:00`).toISOString();
       const ends_at = new Date(`${endDate}T${endTime}:00`).toISOString();
-      await upsert({ data: { event_id: eventId, name, starts_at, ends_at, capacity: cap } });
+      await adminUpsertSlot({ event_id: eventId, name, starts_at, ends_at, capacity: cap });
       qc.invalidateQueries({ queryKey: ["a-slots"] });
       toast.success("Slot created");
       setName("");
@@ -309,7 +311,7 @@ function SlotsTab() {
                   {format(sa, "MMM d, yyyy")} → {format(ea, "MMM d, yyyy")} · {format(sa, "p")} – {format(ea, "p")} · cap {s.capacity}
                 </div>
               </div>
-              <button onClick={async () => { if (confirm("Delete?")) { await del({ data: { id: s.id } }); qc.invalidateQueries({ queryKey: ["a-slots"] }); } }}
+              <button onClick={async () => { if (confirm("Delete?")) { await adminDeleteSlot({ id: s.id }); qc.invalidateQueries({ queryKey: ["a-slots"] }); } }}
                 className="rounded-lg bg-destructive/15 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/25">
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -323,8 +325,7 @@ function SlotsTab() {
 }
 
 function RegistrationsTab() {
-  const list = useServerFn(adminListRegistrations);
-  const { data } = useQuery({ queryKey: ["a-regs"], queryFn: () => list() });
+  const { data } = useQuery({ queryKey: ["a-regs"], queryFn: () => adminListRegistrations() });
   return (
     <Panel title="Registrations">
       <div className="overflow-x-auto rounded-2xl glass">
@@ -373,11 +374,10 @@ function StatusPill({ status }: { status: string }) {
 }
 
 function DashTab() {
-  const fn = useServerFn(getDashboardCounts);
   const [eventId, setEventId] = useState<string>("");
   const { data } = useQuery({
     queryKey: ["a-dash", eventId],
-    queryFn: () => fn({ data: eventId ? { eventId } : {} }),
+    queryFn: () => getDashboardCounts(eventId ? { eventId } : {}),
     refetchInterval: 5000,
   });
   const events = (data as any)?.events ?? [];
@@ -455,8 +455,7 @@ function Stat({ label, value, hue, pulse }: { label: string; value: number; hue:
 }
 
 function ReportsTab() {
-  const fn = useServerFn(adminReports);
-  const { data } = useQuery({ queryKey: ["a-reports"], queryFn: () => fn() });
+  const { data } = useQuery({ queryKey: ["a-reports"], queryFn: () => adminReports() });
   if (!data) return null;
   return (
     <div className="space-y-6">
@@ -488,10 +487,8 @@ function BigStat({ label, value, danger }: { label: string; value: number | stri
 }
 
 function UsersTab() {
-  const list = useServerFn(adminListUsers); const create = useServerFn(adminCreateUser);
-  const setRole = useServerFn(adminSetRole); const delU = useServerFn(adminDeleteUser);
   const qc = useQueryClient();
-  const { data } = useQuery({ queryKey: ["a-users"], queryFn: () => list() });
+  const { data } = useQuery({ queryKey: ["a-users"], queryFn: () => adminListUsers() });
   const [email, setEmail] = useState(""); const [pw, setPw] = useState("");
   const [role, setRoleV] = useState<"admin" | "dashboard" | "pos" | "scanner">("scanner");
   const allRoles: ("admin" | "dashboard" | "pos" | "scanner")[] = ["admin", "dashboard", "pos", "scanner"];
@@ -506,7 +503,7 @@ function UsersTab() {
           searchable={false}
           options={allRoles.map((r) => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
         />
-        <button onClick={async () => { try { await create({ data: { email, password: pw, role } }); toast.success("Created"); setEmail(""); setPw(""); qc.invalidateQueries({ queryKey: ["a-users"] }); } catch (e: any) { toast.error(e.message); } }}
+        <button onClick={async () => { try { await adminCreateUser({ email, password: pw, role }); toast.success("Created"); setEmail(""); setPw(""); qc.invalidateQueries({ queryKey: ["a-users"] }); } catch (e: any) { toast.error(e.message); } }}
           className="rounded-xl bg-aqua text-sm font-semibold text-primary-foreground shadow-glow-aqua">Create user</button>
       </div>
       <div className="space-y-2">
@@ -514,7 +511,7 @@ function UsersTab() {
           <div key={u.id} className="rounded-2xl glass p-4">
             <div className="flex items-center justify-between">
               <div className="font-medium">{u.email}</div>
-              <button onClick={async () => { if (confirm("Delete user?")) { await delU({ data: { user_id: u.id } }); qc.invalidateQueries({ queryKey: ["a-users"] }); } }}
+              <button onClick={async () => { if (confirm("Delete user?")) { await adminDeleteUser({ user_id: u.id }); qc.invalidateQueries({ queryKey: ["a-users"] }); } }}
                 className="rounded-lg bg-destructive/15 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/25">
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -524,7 +521,7 @@ function UsersTab() {
                 const has = u.roles.includes(r);
                 return (
                   <button key={r}
-                    onClick={async () => { await setRole({ data: { user_id: u.id, role: r, enabled: !has } }); qc.invalidateQueries({ queryKey: ["a-users"] }); }}
+                    onClick={async () => { await adminSetRole({ user_id: u.id, role: r, enabled: !has }); qc.invalidateQueries({ queryKey: ["a-users"] }); }}
                     className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
                       has ? "bg-aqua/20 text-aqua ring-1 ring-aqua/40" : "bg-foreground/5 text-muted-foreground hover:bg-foreground/10"
                     }`}>
@@ -541,8 +538,7 @@ function UsersTab() {
 }
 
 function SettingsTab() {
-  const get = useServerFn(adminGetSettings); const save = useServerFn(adminSaveSettings);
-  const { data, refetch } = useQuery({ queryKey: ["a-settings"], queryFn: () => get() });
+  const { data, refetch } = useQuery({ queryKey: ["a-settings"], queryFn: () => adminGetSettings() });
   const [key, setKey] = useState("");
   const [enabled, setEnabled] = useState(false);
   const [synced, setSynced] = useState(false);
@@ -569,7 +565,7 @@ function SettingsTab() {
           </div>
           <Switch checked={enabled} onCheckedChange={setEnabled} />
         </div>
-        <button onClick={async () => { await save({ data: { scandit_api_key: key || null, scandit_enabled: enabled } }); toast.success("Saved"); refetch(); }}
+        <button onClick={async () => { await adminSaveSettings({ scandit_api_key: key || null, scandit_enabled: enabled }); toast.success("Saved"); refetch(); }}
           className="inline-flex items-center gap-2 rounded-xl bg-sunset px-5 py-2.5 text-sm font-semibold text-foreground shadow-glow-sunset">
           Save settings
         </button>

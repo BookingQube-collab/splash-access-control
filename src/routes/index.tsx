@@ -1,20 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+"use client";
+
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { ScanLine, ShieldCheck, Monitor, Store, Sparkles, Sun, Waves, ArrowRight } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
 import { format } from "date-fns";
 
-export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "SummerSplash — Make a splash this summer" },
-      { name: "description", content: "Premium beach festival registration. Reserve your slot and get an instant digital pass." },
-    ],
-  }),
-  component: Index,
-});
-
-function Index() {
+export default function IndexPage() {
   const today = format(new Date(), "EEEE · MMMM d, yyyy");
 
   return (
@@ -37,7 +29,7 @@ function Index() {
           </div>
         </motion.div>
         <Link
-          to="/register"
+          href="/register"
           className="group inline-flex items-center gap-2 rounded-full glass px-5 py-2 text-sm font-semibold text-foreground hover-glow"
         >
           Register
@@ -68,7 +60,7 @@ function Index() {
 
             <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
               <Link
-                to="/register"
+                href="/register"
                 className="group relative inline-flex items-center gap-2 overflow-hidden rounded-full bg-sunset px-8 py-3.5 font-semibold text-foreground shadow-glow-sunset"
               >
                 <span className="relative z-10">Reserve your slot</span>
@@ -129,10 +121,10 @@ function Index() {
             <h2 className="mt-2 font-display text-3xl font-bold">Staff portals</h2>
           </div>
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <PortalCard to="/login/admin" icon={<ShieldCheck className="h-6 w-6" />} title="Admin" desc="Full management" hue="from-aqua to-primary" />
-            <PortalCard to="/login/dashboard" icon={<Monitor className="h-6 w-6" />} title="Live Dashboard" desc="Operations team" hue="from-primary to-sunset" />
-            <PortalCard to="/login/pos" icon={<Store className="h-6 w-6" />} title="POS" desc="Counter staff" hue="from-sunset to-coral" />
-            <PortalCard to="/login/scanner" icon={<ScanLine className="h-6 w-6" />} title="Scanner" desc="Entry / exit" hue="from-coral to-aqua" />
+            <PortalCard href="/login/admin" icon={<ShieldCheck className="h-6 w-6" />} title="Admin" desc="Full management" hue="from-aqua to-primary" />
+            <PortalCard href="/login/dashboard" icon={<Monitor className="h-6 w-6" />} title="Live Dashboard" desc="Operations team" hue="from-primary to-sunset" />
+            <PortalCard href="/login/pos" icon={<Store className="h-6 w-6" />} title="POS" desc="Counter staff" hue="from-sunset to-coral" />
+            <PortalCard href="/login/scanner" icon={<ScanLine className="h-6 w-6" />} title="Scanner" desc="Entry / exit" hue="from-coral to-aqua" />
           </div>
         </section>
       </main>
@@ -141,10 +133,10 @@ function Index() {
 }
 
 function PortalCard({
-  to, icon, title, desc, hue,
-}: { to: string; icon: React.ReactNode; title: string; desc: string; hue: string }) {
+  href, icon, title, desc, hue,
+}: { href: string; icon: React.ReactNode; title: string; desc: string; hue: string }) {
   return (
-    <Link to={to} className="group">
+    <Link href={href} className="group">
       <motion.div
         whileHover={{ y: -4 }}
         className="relative overflow-hidden rounded-2xl glass p-6 transition-shadow hover:shadow-glow-aqua"

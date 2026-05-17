@@ -1,6 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+"use client";
+
+import Link from "next/link";
 import { useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -9,25 +10,13 @@ import {
   CheckCircle2, LogOut, Clock, AlertTriangle, Search, ShieldCheck,
 } from "lucide-react";
 import { BeachBg } from "@/components/beach-bg";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getMyPasses } from "@/lib/summersplash.functions";
 import { IntlPhoneInput } from "@/components/phone-input";
 
-export const Route = createFileRoute("/my-passes")({
-  head: () => ({
-    meta: [
-      { title: "My Passes — SummerSplash" },
-      { name: "description", content: "Look up your SummerSplash passes with your phone number." },
-    ],
-  }),
-  component: MyPassesPage,
-});
-
 type Pass = Awaited<ReturnType<typeof getMyPasses>>["passes"][number];
 
-function MyPassesPage() {
-  const fetchPasses = useServerFn(getMyPasses);
+export default function MyPassesPage() {
   const [mobile, setMobile] = useState("");
   const [loading, setLoading] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
@@ -39,7 +28,7 @@ function MyPassesPage() {
     if (m.length < 7) { toast.error("Enter a valid mobile number"); return; }
     setLoading(true);
     try {
-      const res = await fetchPasses({ data: { mobile: m } });
+      const res = await getMyPasses({ mobile: m });
       setPasses(res.passes);
       setUnlocked(true);
       if (res.passes.length === 0) toast.info("No passes found for this number");
@@ -59,7 +48,7 @@ function MyPassesPage() {
 
       <header className="relative z-20 border-b border-foreground/5 bg-background/40 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
-          <Link to="/" className="flex items-center gap-2 font-display text-lg font-extrabold">
+          <Link href="/" className="flex items-center gap-2 font-display text-lg font-extrabold">
             <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-aqua/30 to-primary/20 text-aqua ring-1 ring-aqua/30">
               <Ticket className="h-4 w-4" />
             </span>
@@ -136,7 +125,7 @@ function MyPassesPage() {
                   </div>
                   <p className="mt-3 font-display text-lg font-bold">No passes yet</p>
                   <p className="mt-1 text-sm text-muted-foreground">We couldn't find any bookings for {mobile}.</p>
-                  <Link to="/register" className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-aqua/15 px-4 py-2 text-sm font-bold text-aqua ring-1 ring-aqua/30 hover:bg-aqua/25">
+                  <Link href="/register" className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-aqua/15 px-4 py-2 text-sm font-bold text-aqua ring-1 ring-aqua/30 hover:bg-aqua/25">
                     Book a slot <ArrowRight className="h-4 w-4" />
                   </Link>
                 </div>
@@ -224,11 +213,11 @@ function PassCard({ pass }: { pass: Pass }) {
       </div>
 
       <div className="mt-3 flex gap-2">
-        <Link to="/pass/$token" params={{ token: pass.qr_token }} target="_blank"
+        <Link href={`/pass/${pass.qr_token}`} target="_blank"
           className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-aqua/15 px-3 py-2 text-xs font-bold text-aqua ring-1 ring-aqua/30 hover:bg-aqua/25">
           <QrCode className="h-3.5 w-3.5" /> View pass
         </Link>
-        <Link to="/pass/$token" params={{ token: pass.qr_token }} target="_blank"
+        <Link href={`/pass/${pass.qr_token}`} target="_blank"
           className="inline-flex items-center justify-center gap-1 rounded-xl bg-foreground/10 px-3 py-2 text-xs font-semibold hover:bg-foreground/15">
           <ExternalLink className="h-3.5 w-3.5" />
         </Link>

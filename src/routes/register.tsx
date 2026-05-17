@@ -1,6 +1,8 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,21 +15,9 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { IntlPhoneInput } from "@/components/phone-input";
 
-export const Route = createFileRoute("/register")({
-  head: () => ({
-    meta: [
-      { title: "Register — SummerSplash" },
-      { name: "description", content: "Reserve your slot at SummerSplash and get an instant QR pass." },
-    ],
-  }),
-  component: RegisterPage,
-});
-
-function RegisterPage() {
-  const navigate = useNavigate();
-  const fetchEvent = useServerFn(getPublicEvent);
-  const register = useServerFn(publicRegister);
-  const { data, isLoading, refetch } = useQuery({ queryKey: ["public-event"], queryFn: () => fetchEvent(), refetchInterval: 5000, refetchOnWindowFocus: true });
+export default function RegisterPage() {
+  const router = useRouter();
+  const { data, isLoading, refetch } = useQuery({ queryKey: ["public-event"], queryFn: () => getPublicEvent(), refetchInterval: 5000, refetchOnWindowFocus: true });
 
   const [slotId, setSlotId] = useState("");
   const [name, setName] = useState("");
@@ -41,8 +31,8 @@ function RegisterPage() {
     if (!slotId) { toast.error("Pick a slot first"); return; }
     setSubmitting(true);
     try {
-      const res = await register({ data: { slot_id: slotId, customer_name: name.trim(), mobile: mobile.trim(), email: email.trim(), guest_count: guests } });
-      navigate({ to: "/pass/$token", params: { token: res.qr_token } });
+      const res = await publicRegister({ slot_id: slotId, customer_name: name.trim(), mobile: mobile.trim(), email: email.trim(), guest_count: guests });
+      router.push(`/pass/${res.qr_token}`);
     } catch (err: any) {
       toast.error(err.message || "Registration failed");
       refetch();
@@ -56,10 +46,10 @@ function RegisterPage() {
       <BeachBg variant="ocean" />
 
       <header className="relative z-10 mx-auto flex max-w-3xl items-center justify-between px-6 py-6">
-        <Link to="/" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> Back
         </Link>
-        <Link to="/" className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2">
           <Waves className="h-5 w-5 text-primary" />
           <span className="font-display text-base font-bold">SummerSplash</span>
         </Link>
