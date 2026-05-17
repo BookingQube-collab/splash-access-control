@@ -4,42 +4,50 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 // ============ PUBLIC: list current event + slots with remaining capacity ============
-export const getPublicEvent = createServerFn({ method: "GET" }).handler(async () => {
-  const today = new Date().toISOString().slice(0, 10);
-  // 1) prefer an active event whose date range covers today
-  const { data: live } = await supabaseAdmin
-    .from("events")
-    .select("*")
-    .eq("is_active", true)
-    .lte("start_date", today)
-    .gte("end_date", today)
-    .order("start_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (live) return loadSlots(live);
+export const getPublicEvent = createServerFn({ method: "GET" })
+  .inputValidator((d: unknown) => z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).parse(d ?? {}))
+  .handler(async ({ data }) => {
+    const today = new Date().toISOString().slice(0, 10);
+    // 1) prefer an active event whose date range covers today
+    const { data: live } = await supabaseAdmin
+      .from("events")
+      .select("*")
+      .eq("is_active", true)
+      .lte("start_date", today)
+      .gte("end_date", today)
+      .order("start_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (live) return loadSlots(live, data.date);
 
-  // 2) fallback: most recent active event (upcoming or past)
-  const { data: fallback } = await supabaseAdmin
-    .from("events")
-    .select("*")
-    .eq("is_active", true)
-    .order("event_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!fallback) return { event: null, slots: [] };
-  return loadSlots(fallback);
-});
+    // 2) fallback: most recent active event (upcoming or past)
+    const { data: fallback } = await supabaseAdmin
+      .from("events")
+      .select("*")
+      .eq("is_active", true)
+      .order("event_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!fallback) return { event: null, slots: [], bookingDate: data.date ?? today, daySales: 0 };
+    return loadSlots(fallback, data.date);
+  });
 
-async function loadSlots(event: { id: string; name: string; event_date: string }) {
+async function loadSlots(event: { id: string; name: string; event_date: string; start_date: string; end_date: string }, bookingDate?: string) {
   const { data: slots } = await supabaseAdmin
     .from("slots")
     .select("*")
     .eq("event_id", event.id)
     .order("starts_at", { ascending: true });
 
-  // Per-day capacity reset — only count registrations created today
-  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  // Clamp booking date to event range; default = today if in range, else start_date
+  const today = new Date().toISOString().slice(0, 10);
+  let dateStr = bookingDate ?? (today >= event.start_date && today <= event.end_date ? today : event.start_date);
+  if (dateStr < event.start_date) dateStr = event.start_date;
+  if (dateStr > event.end_date) dateStr = event.end_date;
+  const dayStart = new Date(`${dateStr}T00:00:00`);
   const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+
+  let daySales = 0;
   const result = await Promise.all(
     (slots ?? []).map(async (s) => {
       const { data: regs } = await supabaseAdmin
@@ -50,15 +58,16 @@ async function loadSlots(event: { id: string; name: string; event_date: string }
         .gte("created_at", dayStart.toISOString())
         .lt("created_at", dayEnd.toISOString());
       const used = (regs ?? []).reduce((sum, r: any) => sum + (r.guest_count ?? 1), 0);
+      daySales += used;
       return { ...s, registered: used, remaining: Math.max(0, s.capacity - used) };
     })
   );
-  return { event, slots: result };
+  return { event, slots: result, bookingDate: dateStr, daySales };
 }
 
-// Sum of guest_count for a slot in active/entered status — today only (per-day capacity)
-async function sumGuests(client: any, slotId: string) {
-  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+// Sum of guest_count for a slot in active/entered status — for a specific day (per-day capacity)
+async function sumGuests(client: any, slotId: string, dateStr?: string) {
+  const dayStart = dateStr ? new Date(`${dateStr}T00:00:00`) : (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
   const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
   const { data } = await client
     .from("registrations")
@@ -77,6 +86,7 @@ const registerSchema = z.object({
   mobile: z.string().trim().min(7).max(20),
   email: z.string().trim().email().max(255).optional().or(z.literal("")),
   guest_count: z.number().int().min(1).max(20),
+  booking_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export const publicRegister = createServerFn({ method: "POST" })
@@ -316,8 +326,13 @@ export const posRegister = createServerFn({ method: "POST" })
       .maybeSingle();
     if (dupe) return { id: dupe.id, qr_token: dupe.qr_token };
 
-    const used = await sumGuests(context.supabase, data.slot_id);
+    const today = new Date().toISOString().slice(0, 10);
+    const bookingDate = data.booking_date && data.booking_date !== today ? data.booking_date : undefined;
+    const used = await sumGuests(context.supabase, data.slot_id, bookingDate ?? today);
     if (used + data.guest_count > slot.capacity) throw new Error("Slot is full");
+
+    // For advance/back-dated bookings, anchor created_at to noon of that date (keeps per-day capacity correct)
+    const createdAt = bookingDate ? new Date(`${bookingDate}T12:00:00`).toISOString() : new Date().toISOString();
 
     const { data: reg, error } = await context.supabase.from("registrations").insert({
       slot_id: data.slot_id,
@@ -325,6 +340,7 @@ export const posRegister = createServerFn({ method: "POST" })
       mobile: data.mobile,
       email: data.email || null,
       guest_count: data.guest_count,
+      created_at: createdAt,
     }).select("id, qr_token").single();
     if (error) throw new Error(error.message);
     return { id: reg.id, qr_token: reg.qr_token };

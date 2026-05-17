@@ -9,6 +9,9 @@ import { IntlPhoneInput } from "@/components/phone-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Search, User, Phone, Mail, ExternalLink, Sparkles,
@@ -40,10 +43,12 @@ function POS() {
   const lookupToken = useServerFn(lookupByToken);
   const { signOut } = useAuth();
   const navigate = useNavigate();
+  const [bookingDate, setBookingDate] = useState<string | undefined>(undefined);
   const { data, refetch } = useQuery({
-    queryKey: ["pos-event"], queryFn: () => fetchEvent(),
+    queryKey: ["pos-event", bookingDate ?? "auto"], queryFn: () => fetchEvent({ data: bookingDate ? { date: bookingDate } : {} }),
     refetchInterval: 5000, refetchOnWindowFocus: true,
   });
+  const activeDate = data?.bookingDate;
 
   const [slotId, setSlotId] = useState("");
   const [name, setName] = useState("");
@@ -194,6 +199,7 @@ function POS() {
       const res = await register({ data: {
         slot_id: slot.id, customer_name: name.trim(), mobile: mobile.trim(),
         email: email.trim(), guest_count: guests,
+        booking_date: activeDate,
       } });
       setLastToken(res.qr_token);
       setModalMeta({ name: name.trim(), slot: slot.name, guests });
@@ -261,6 +267,20 @@ function POS() {
         <div className="grid h-full gap-3 lg:grid-cols-12">
           {/* === LEFT column: slots + customer === */}
           <div className="space-y-3 lg:col-span-7">
+            {data?.event && (
+              <Section icon={<Calendar className="h-4 w-4" />} title="Booking date" trailing={
+                <span className="rounded-full bg-aqua/15 px-3 py-1 text-[11px] font-bold text-aqua ring-1 ring-aqua/30">
+                  {data.daySales ?? 0} sold
+                </span>
+              }>
+                <EventDateStrip
+                  startDate={data.event.start_date}
+                  endDate={data.event.end_date}
+                  selected={activeDate ?? data.event.start_date}
+                  onSelect={(d) => { setBookingDate(d); setSlotId(""); }}
+                />
+              </Section>
+            )}
             <Section step={1} title="Choose slot" trailing={
               slot && <SlotMeterBadge slot={slot} guests={guests} />
             }>
@@ -723,6 +743,78 @@ function SlotMeterBadge({ slot, guests }: { slot: { capacity: number; remaining:
       <span className="text-muted-foreground">selected · </span>
       <span className="text-foreground">{after}/{slot.capacity}</span>
     </span>
+  );
+}
+
+function EventDateStrip({ startDate, endDate, selected, onSelect }: {
+  startDate: string; endDate: string; selected: string; onSelect: (d: string) => void;
+}) {
+  const days = useMemo(() => {
+    const out: string[] = [];
+    const s = new Date(`${startDate}T00:00:00`);
+    const e = new Date(`${endDate}T00:00:00`);
+    for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+      out.push(d.toISOString().slice(0, 10));
+    }
+    return out;
+  }, [startDate, endDate]);
+  const today = new Date().toISOString().slice(0, 10);
+  const sel = new Date(`${selected}T00:00:00`);
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex flex-1 gap-2 overflow-x-auto pb-1">
+        {days.map((d) => {
+          const dt = new Date(`${d}T00:00:00`);
+          const isSel = d === selected;
+          const isToday = d === today;
+          return (
+            <button key={d} type="button" onClick={() => onSelect(d)}
+              className={cn(
+                "flex shrink-0 flex-col items-center rounded-xl px-3 py-2 ring-1 transition",
+                isSel
+                  ? "bg-aqua text-primary-foreground ring-aqua shadow-glow-aqua"
+                  : "bg-foreground/5 text-foreground/80 ring-foreground/10 hover:bg-foreground/10",
+              )}
+            >
+              <span className="text-[9px] font-bold uppercase tracking-wider opacity-80">
+                {dt.toLocaleDateString([], { weekday: "short" })}
+              </span>
+              <span className="font-display text-lg font-extrabold leading-none tabular-nums">
+                {dt.getDate()}
+              </span>
+              <span className="text-[9px] font-semibold uppercase tracking-wider opacity-80">
+                {dt.toLocaleDateString([], { month: "short" })}
+              </span>
+              {isToday && (
+                <span className={cn("mt-0.5 text-[8px] font-bold uppercase", isSel ? "text-primary-foreground" : "text-aqua")}>Today</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button type="button"
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-foreground/5 text-foreground/70 ring-1 ring-foreground/10 transition hover:bg-aqua/15 hover:text-aqua"
+            title="Pick a date">
+            <Calendar className="h-5 w-5" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="end">
+          <CalendarPicker
+            mode="single"
+            selected={sel}
+            onSelect={(d) => d && onSelect(d.toISOString().slice(0, 10))}
+            disabled={(d) => {
+              const ds = d.toISOString().slice(0, 10);
+              return ds < startDate || ds > endDate;
+            }}
+            initialFocus
+            className={cn("p-3 pointer-events-auto")}
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }
 
