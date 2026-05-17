@@ -65,9 +65,9 @@ async function loadSlots(event: { id: string; name: string; event_date: string; 
   return { event, slots: result, bookingDate: dateStr, daySales };
 }
 
-// Sum of guest_count for a slot in active/entered status — today only (per-day capacity)
-async function sumGuests(client: any, slotId: string) {
-  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+// Sum of guest_count for a slot in active/entered status — for a specific day (per-day capacity)
+async function sumGuests(client: any, slotId: string, dateStr?: string) {
+  const dayStart = dateStr ? new Date(`${dateStr}T00:00:00`) : (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
   const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
   const { data } = await client
     .from("registrations")
