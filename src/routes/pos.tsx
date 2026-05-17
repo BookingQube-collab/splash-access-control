@@ -267,6 +267,20 @@ function POS() {
         <div className="grid h-full gap-3 lg:grid-cols-12">
           {/* === LEFT column: slots + customer === */}
           <div className="space-y-3 lg:col-span-7">
+            {data?.event && (
+              <Section icon={<Calendar className="h-4 w-4" />} title="Booking date" trailing={
+                <span className="rounded-full bg-aqua/15 px-3 py-1 text-[11px] font-bold text-aqua ring-1 ring-aqua/30">
+                  {data.daySales ?? 0} sold
+                </span>
+              }>
+                <EventDateStrip
+                  startDate={data.event.start_date}
+                  endDate={data.event.end_date}
+                  selected={activeDate ?? data.event.start_date}
+                  onSelect={(d) => { setBookingDate(d); setSlotId(""); }}
+                />
+              </Section>
+            )}
             <Section step={1} title="Choose slot" trailing={
               slot && <SlotMeterBadge slot={slot} guests={guests} />
             }>
