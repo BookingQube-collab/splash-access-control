@@ -746,6 +746,78 @@ function SlotMeterBadge({ slot, guests }: { slot: { capacity: number; remaining:
   );
 }
 
+function EventDateStrip({ startDate, endDate, selected, onSelect }: {
+  startDate: string; endDate: string; selected: string; onSelect: (d: string) => void;
+}) {
+  const days = useMemo(() => {
+    const out: string[] = [];
+    const s = new Date(`${startDate}T00:00:00`);
+    const e = new Date(`${endDate}T00:00:00`);
+    for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+      out.push(d.toISOString().slice(0, 10));
+    }
+    return out;
+  }, [startDate, endDate]);
+  const today = new Date().toISOString().slice(0, 10);
+  const sel = new Date(`${selected}T00:00:00`);
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex flex-1 gap-2 overflow-x-auto pb-1">
+        {days.map((d) => {
+          const dt = new Date(`${d}T00:00:00`);
+          const isSel = d === selected;
+          const isToday = d === today;
+          return (
+            <button key={d} type="button" onClick={() => onSelect(d)}
+              className={cn(
+                "flex shrink-0 flex-col items-center rounded-xl px-3 py-2 ring-1 transition",
+                isSel
+                  ? "bg-aqua text-primary-foreground ring-aqua shadow-glow-aqua"
+                  : "bg-foreground/5 text-foreground/80 ring-foreground/10 hover:bg-foreground/10",
+              )}
+            >
+              <span className="text-[9px] font-bold uppercase tracking-wider opacity-80">
+                {dt.toLocaleDateString([], { weekday: "short" })}
+              </span>
+              <span className="font-display text-lg font-extrabold leading-none tabular-nums">
+                {dt.getDate()}
+              </span>
+              <span className="text-[9px] font-semibold uppercase tracking-wider opacity-80">
+                {dt.toLocaleDateString([], { month: "short" })}
+              </span>
+              {isToday && (
+                <span className={cn("mt-0.5 text-[8px] font-bold uppercase", isSel ? "text-primary-foreground" : "text-aqua")}>Today</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button type="button"
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-foreground/5 text-foreground/70 ring-1 ring-foreground/10 transition hover:bg-aqua/15 hover:text-aqua"
+            title="Pick a date">
+            <Calendar className="h-5 w-5" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="end">
+          <CalendarPicker
+            mode="single"
+            selected={sel}
+            onSelect={(d) => d && onSelect(d.toISOString().slice(0, 10))}
+            disabled={(d) => {
+              const ds = d.toISOString().slice(0, 10);
+              return ds < startDate || ds > endDate;
+            }}
+            initialFocus
+            className={cn("p-3 pointer-events-auto")}
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 function GuestStepper({ guests, setGuests, maxAllowed }: { guests: number; setGuests: (n: number) => void; maxAllowed: number }) {
   const setG = (n: number) => setGuests(Math.max(1, Math.min(maxAllowed, Math.floor(n) || 1)));
   const presets = [1, 2, 4, 6, 8].filter((n) => n <= maxAllowed);
