@@ -53,10 +53,65 @@ Standalone Next.js app for **E3 Summer Splash** event registration, QR passes, a
 - Install command: `npm install`
 - Build command: `npm run build`
 
+## Push to GitHub & open a PR
+
+Requires [GitHub CLI](https://cli.github.com/) (`gh auth login`).
+
+### npm script (recommended)
+
+```bash
+npm run push:pr
+```
+
+From `main`, this creates a branch (`update/YYYYMMDD-HHmm`), commits all changes, pushes, and opens a PR against `main`.
+
+Custom commit message:
+
+```bash
+npm run push:pr -- -m "Fix admin user list"
+```
+
+Push only (no PR):
+
+```bash
+npm run push:pr -- --no-pr
+```
+
+### One line (push + create PR)
+
+**PowerShell** (run from the project root):
+
+```powershell
+git switch -c "update/$(Get-Date -Format 'yyyyMMdd-HHmm')"; git add -A; git commit -m "Update"; git push -u origin HEAD; gh pr create --base main --fill
+```
+
+Creates a branch, commits all changes, pushes, and opens a PR against `main`.
+
+If you are already on a feature branch with commits:
+
+```powershell
+git push -u origin HEAD; gh pr create --base main --fill
+```
+
+### Push only, then Cursor agent creates the PR
+
+```powershell
+git add -A; git commit -m "Update"; git push -u origin HEAD
+```
+
+Then in Cursor chat: **Create a pull request** — the agent will inspect the branch and run `gh pr create`.
+
+| Situation | What to do |
+|-----------|------------|
+| Already on a feature branch with commits | `git push -u origin HEAD`, then ask the agent to create the PR |
+| Working on `main` | Use the one-liner above (creates a branch first) |
+| Nothing to commit | Skip `git add` / `git commit`, or only push existing commits |
+
 ## Scripts
 
-| Command        | Description          |
-|----------------|----------------------|
-| `npm run dev`  | Development server   |
-| `npm run build`| Production build     |
-| `npm run start`| Production server    |
+| Command           | Description                              |
+|-------------------|------------------------------------------|
+| `npm run dev`     | Development server                       |
+| `npm run build`   | Production build                         |
+| `npm run start`   | Production server                        |
+| `npm run push:pr` | Branch, commit, push, and open a PR      |

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "push:pr": "node scripts/push-pr.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
