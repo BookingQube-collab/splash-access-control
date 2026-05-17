@@ -326,8 +326,13 @@ export const posRegister = createServerFn({ method: "POST" })
       .maybeSingle();
     if (dupe) return { id: dupe.id, qr_token: dupe.qr_token };
 
-    const used = await sumGuests(context.supabase, data.slot_id);
+    const today = new Date().toISOString().slice(0, 10);
+    const bookingDate = data.booking_date && data.booking_date !== today ? data.booking_date : undefined;
+    const used = await sumGuests(context.supabase, data.slot_id, bookingDate ?? today);
     if (used + data.guest_count > slot.capacity) throw new Error("Slot is full");
+
+    // For advance/back-dated bookings, anchor created_at to noon of that date (keeps per-day capacity correct)
+    const createdAt = bookingDate ? new Date(`${bookingDate}T12:00:00`).toISOString() : new Date().toISOString();
 
     const { data: reg, error } = await context.supabase.from("registrations").insert({
       slot_id: data.slot_id,
@@ -335,6 +340,7 @@ export const posRegister = createServerFn({ method: "POST" })
       mobile: data.mobile,
       email: data.email || null,
       guest_count: data.guest_count,
+      created_at: createdAt,
     }).select("id, qr_token").single();
     if (error) throw new Error(error.message);
     return { id: reg.id, qr_token: reg.qr_token };
