@@ -4,42 +4,50 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 // ============ PUBLIC: list current event + slots with remaining capacity ============
-export const getPublicEvent = createServerFn({ method: "GET" }).handler(async () => {
-  const today = new Date().toISOString().slice(0, 10);
-  // 1) prefer an active event whose date range covers today
-  const { data: live } = await supabaseAdmin
-    .from("events")
-    .select("*")
-    .eq("is_active", true)
-    .lte("start_date", today)
-    .gte("end_date", today)
-    .order("start_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (live) return loadSlots(live);
+export const getPublicEvent = createServerFn({ method: "GET" })
+  .inputValidator((d: unknown) => z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).parse(d ?? {}))
+  .handler(async ({ data }) => {
+    const today = new Date().toISOString().slice(0, 10);
+    // 1) prefer an active event whose date range covers today
+    const { data: live } = await supabaseAdmin
+      .from("events")
+      .select("*")
+      .eq("is_active", true)
+      .lte("start_date", today)
+      .gte("end_date", today)
+      .order("start_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (live) return loadSlots(live, data.date);
 
-  // 2) fallback: most recent active event (upcoming or past)
-  const { data: fallback } = await supabaseAdmin
-    .from("events")
-    .select("*")
-    .eq("is_active", true)
-    .order("event_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!fallback) return { event: null, slots: [] };
-  return loadSlots(fallback);
-});
+    // 2) fallback: most recent active event (upcoming or past)
+    const { data: fallback } = await supabaseAdmin
+      .from("events")
+      .select("*")
+      .eq("is_active", true)
+      .order("event_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!fallback) return { event: null, slots: [], bookingDate: data.date ?? today, daySales: 0 };
+    return loadSlots(fallback, data.date);
+  });
 
-async function loadSlots(event: { id: string; name: string; event_date: string }) {
+async function loadSlots(event: { id: string; name: string; event_date: string; start_date: string; end_date: string }, bookingDate?: string) {
   const { data: slots } = await supabaseAdmin
     .from("slots")
     .select("*")
     .eq("event_id", event.id)
     .order("starts_at", { ascending: true });
 
-  // Per-day capacity reset — only count registrations created today
-  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  // Clamp booking date to event range; default = today if in range, else start_date
+  const today = new Date().toISOString().slice(0, 10);
+  let dateStr = bookingDate ?? (today >= event.start_date && today <= event.end_date ? today : event.start_date);
+  if (dateStr < event.start_date) dateStr = event.start_date;
+  if (dateStr > event.end_date) dateStr = event.end_date;
+  const dayStart = new Date(`${dateStr}T00:00:00`);
   const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+
+  let daySales = 0;
   const result = await Promise.all(
     (slots ?? []).map(async (s) => {
       const { data: regs } = await supabaseAdmin
@@ -50,10 +58,11 @@ async function loadSlots(event: { id: string; name: string; event_date: string }
         .gte("created_at", dayStart.toISOString())
         .lt("created_at", dayEnd.toISOString());
       const used = (regs ?? []).reduce((sum, r: any) => sum + (r.guest_count ?? 1), 0);
+      daySales += used;
       return { ...s, registered: used, remaining: Math.max(0, s.capacity - used) };
     })
   );
-  return { event, slots: result };
+  return { event, slots: result, bookingDate: dateStr, daySales };
 }
 
 // Sum of guest_count for a slot in active/entered status — today only (per-day capacity)
