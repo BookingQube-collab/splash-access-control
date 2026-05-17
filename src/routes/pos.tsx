@@ -196,6 +196,7 @@ function POS() {
       const res = await register({ data: {
         slot_id: slot.id, customer_name: name.trim(), mobile: mobile.trim(),
         email: email.trim(), guest_count: guests,
+        booking_date: activeDate,
       } });
       setLastToken(res.qr_token);
       setModalMeta({ name: name.trim(), slot: slot.name, guests });
