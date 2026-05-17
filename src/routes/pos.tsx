@@ -297,6 +297,12 @@ function POS() {
                           )}
                         </div>
                         <div className="mt-3 font-display text-base font-bold leading-tight">{s.name}</div>
+                        <div className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          <Timer className="h-3 w-3" />
+                          {new Date(s.starts_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          {" – "}
+                          {new Date(s.ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </div>
                         <div className="mt-1.5 flex items-baseline gap-1.5">
                           {full ? (
                             <span className="rounded-md bg-coral/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-coral">Full</span>
