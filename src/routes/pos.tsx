@@ -40,10 +40,12 @@ function POS() {
   const lookupToken = useServerFn(lookupByToken);
   const { signOut } = useAuth();
   const navigate = useNavigate();
+  const [bookingDate, setBookingDate] = useState<string | undefined>(undefined);
   const { data, refetch } = useQuery({
-    queryKey: ["pos-event"], queryFn: () => fetchEvent(),
+    queryKey: ["pos-event", bookingDate ?? "auto"], queryFn: () => fetchEvent({ data: bookingDate ? { date: bookingDate } : {} }),
     refetchInterval: 5000, refetchOnWindowFocus: true,
   });
+  const activeDate = data?.bookingDate;
 
   const [slotId, setSlotId] = useState("");
   const [name, setName] = useState("");
