@@ -17,23 +17,239 @@ export type Database = {
       app_settings: {
         Row: {
           id: number
+          mailgun_api_key: string | null
+          mailgun_domain: string | null
+          mailgun_enabled: boolean
+          mailgun_from_email: string | null
+          printer_settings: Json
           scandit_api_key: string | null
           scandit_enabled: boolean
           updated_at: string
         }
         Insert: {
           id?: number
+          mailgun_api_key?: string | null
+          mailgun_domain?: string | null
+          mailgun_enabled?: boolean
+          mailgun_from_email?: string | null
+          printer_settings?: Json
           scandit_api_key?: string | null
           scandit_enabled?: boolean
           updated_at?: string
         }
         Update: {
           id?: number
+          mailgun_api_key?: string | null
+          mailgun_domain?: string | null
+          mailgun_enabled?: boolean
+          mailgun_from_email?: string | null
+          printer_settings?: Json
           scandit_api_key?: string | null
           scandit_enabled?: boolean
           updated_at?: string
         }
         Relationships: []
+      }
+      label_print_templates: {
+        Row: {
+          created_at: string
+          id: string
+          is_default: boolean
+          layout_json: Json
+          name: string
+          preset_key: string
+          updated_at: string
+          zpl_template: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          layout_json?: Json
+          name: string
+          preset_key?: string
+          updated_at?: string
+          zpl_template?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          layout_json?: Json
+          name?: string
+          preset_key?: string
+          updated_at?: string
+          zpl_template?: string | null
+        }
+        Relationships: []
+      }
+      integration_event_mappings: {
+        Row: {
+          bookingqube_event_id: string | null
+          bookingqube_form_id: string
+          created_at: string
+          id: string
+          local_event_id: string
+          provider: string
+        }
+        Insert: {
+          bookingqube_event_id?: string | null
+          bookingqube_form_id: string
+          created_at?: string
+          id?: string
+          local_event_id: string
+          provider?: string
+        }
+        Update: {
+          bookingqube_event_id?: string | null
+          bookingqube_form_id?: string
+          created_at?: string
+          id?: string
+          local_event_id?: string
+          provider?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_event_mappings_local_event_id_fkey"
+            columns: ["local_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_field_mappings: {
+        Row: {
+          bookingqube_field_id: string | null
+          bookingqube_label: string
+          created_at: string
+          event_mapping_id: string
+          id: string
+          local_field: string
+          metadata: Json | null
+          provider: string
+        }
+        Insert: {
+          bookingqube_field_id?: string | null
+          bookingqube_label: string
+          created_at?: string
+          event_mapping_id: string
+          id?: string
+          local_field: string
+          metadata?: Json | null
+          provider?: string
+        }
+        Update: {
+          bookingqube_field_id?: string | null
+          bookingqube_label?: string
+          created_at?: string
+          event_mapping_id?: string
+          id?: string
+          local_field?: string
+          metadata?: Json | null
+          provider?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_field_mappings_event_mapping_id_fkey"
+            columns: ["event_mapping_id"]
+            isOneToOne: false
+            referencedRelation: "integration_event_mappings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_settings: {
+        Row: {
+          api_key: string | null
+          api_key_env_var: string | null
+          api_version: string
+          base_url: string
+          cached_form_schema: Json | null
+          custom_endpoints: Json
+          default_form_id: string | null
+          enabled: boolean
+          get_api_url: string | null
+          id: string
+          post_api_url: string | null
+          provider: string
+          registration_event_slug: string | null
+          updated_at: string
+        }
+        Insert: {
+          api_key?: string | null
+          api_key_env_var?: string | null
+          api_version?: string
+          base_url?: string
+          cached_form_schema?: Json | null
+          custom_endpoints?: Json
+          default_form_id?: string | null
+          enabled?: boolean
+          get_api_url?: string | null
+          id?: string
+          post_api_url?: string | null
+          provider: string
+          registration_event_slug?: string | null
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string | null
+          api_key_env_var?: string | null
+          api_version?: string
+          base_url?: string
+          cached_form_schema?: Json | null
+          custom_endpoints?: Json
+          default_form_id?: string | null
+          enabled?: boolean
+          get_api_url?: string | null
+          id?: string
+          post_api_url?: string | null
+          provider?: string
+          registration_event_slug?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      integration_sync_log: {
+        Row: {
+          created_at: string
+          direction: string
+          error: string | null
+          id: string
+          payload: Json | null
+          provider: string
+          registration_id: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          direction: string
+          error?: string | null
+          id?: string
+          payload?: Json | null
+          provider?: string
+          registration_id?: string | null
+          status: string
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          error?: string | null
+          id?: string
+          payload?: Json | null
+          provider?: string
+          registration_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_sync_log_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: false
+            referencedRelation: "registrations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       events: {
         Row: {
@@ -186,28 +402,34 @@ export type Database = {
       }
       slots: {
         Row: {
+          bookingqube_ticket_id: string | null
           capacity: number
           created_at: string
           ends_at: string
           event_id: string
+          hidden_from_booking: boolean
           id: string
           name: string
           starts_at: string
         }
         Insert: {
+          bookingqube_ticket_id?: string | null
           capacity: number
           created_at?: string
           ends_at: string
           event_id: string
+          hidden_from_booking?: boolean
           id?: string
           name: string
           starts_at: string
         }
         Update: {
+          bookingqube_ticket_id?: string | null
           capacity?: number
           created_at?: string
           ends_at?: string
           event_id?: string
+          hidden_from_booking?: boolean
           id?: string
           name?: string
           starts_at?: string

@@ -1,7 +1,6 @@
-import { RoleLogin } from "@/components/role-login";
+import { redirect } from "next/navigation";
+import { UNIFIED_LOGIN_PATH } from "@/lib/staff-auth";
 
 export default function ScannerLoginPage() {
-  return (
-    <RoleLogin role="scanner" title="Scanner Login" subtitle="Entry & exit scanning." redirectTo="/scanner" />
-  );
+  redirect(UNIFIED_LOGIN_PATH);
 }

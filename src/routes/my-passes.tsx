@@ -1,238 +1,553 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { format } from "date-fns";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
-  Phone, ArrowRight, Ticket, Users, Calendar, QrCode, ExternalLink,
-  CheckCircle2, LogOut, Clock, AlertTriangle, Search, ShieldCheck,
+  CalendarDays,
+  Clock,
+  Home,
+  LogOut,
+  Ticket,
+  User,
 } from "lucide-react";
-import { BeachBg } from "@/components/beach-bg";
-import { Label } from "@/components/ui/label";
-import { getMyPasses } from "@/lib/summersplash.functions";
-import { IntlPhoneInput } from "@/components/phone-input";
+import { getMyPasses, getMyPassesFromQrToken } from "@/lib/summersplash.functions";
+import { formatActionError, phoneDigits } from "@/lib/utils";
+import { todayYmd } from "@/lib/utils";
+import { CustomerLogin } from "@/components/customer-app/customer-login";
+import { CustomerOverviewTab } from "@/components/customer-app/customer-overview-tab";
+import { CustomerCalendarTab } from "@/components/customer-app/customer-calendar-tab";
+import { CustomerTimelineTab } from "@/components/customer-app/customer-timeline-tab";
+import {
+  CustomerAllPassesPanel,
+  CustomerPassesListTab,
+} from "@/components/customer-app/customer-passes-list-tab";
+import { CustomerProfileTab } from "@/components/customer-app/customer-profile-tab";
+import { CustomerPassDetail } from "@/components/customer-app/customer-pass-detail";
+import type { AppTab, CustomerPass } from "@/components/customer-app/types";
+import { PHONE_STORAGE_KEY } from "@/components/customer-app/types";
+import {
+  firstName as deriveFirstName,
+  welcomeBackGuestCount,
+  welcomeBackGuestsMessage,
+} from "@/components/customer-app/utils";
+import { CustomerBeachShell } from "@/components/customer-app/customer-beach-shell";
+import { GuestBookButton, SummerBrandMark } from "@/components/customer-app/summer-brand-mark";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { MY_PASSES_QUERY_KEY, myPassesQueryKey, useMyPassesQuery } from "@/hooks/use-my-passes";
 
-type Pass = Awaited<ReturnType<typeof getMyPasses>>["passes"][number];
+type BottomNav = "home" | "calendar" | "passes" | "profile";
 
-export default function MyPassesPage() {
-  const [mobile, setMobile] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [unlocked, setUnlocked] = useState(false);
-  const [passes, setPasses] = useState<Pass[]>([]);
+const TABS: { key: AppTab; label: string; icon: ReactNode }[] = [
+  { key: "today", label: "Today", icon: <Home className="h-3.5 w-3.5" /> },
+  { key: "calendar", label: "Calendar", icon: <CalendarDays className="h-3.5 w-3.5" /> },
+  { key: "timeline", label: "Timeline", icon: <Clock className="h-3.5 w-3.5" /> },
+];
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export default function MyPassesPage({ routePassId = "" }: { routePassId?: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+  const prefillPhone = searchParams.get("phone") ?? "";
+  const queryPass = searchParams.get("pass") ?? "";
+  const autoLookup = searchParams.get("auto") !== "0";
+
+  const passAnchor = routePassId || queryPass || "";
+  const anchorIsUuid = Boolean(passAnchor && UUID_RE.test(passAnchor));
+  const [mobile, setMobile] = useState(prefillPhone);
+  const passRouteBoot = Boolean(routePassId && UUID_RE.test(routePassId));
+  const [unlocked, setUnlocked] = useState(() => Boolean(prefillPhone && phoneDigits(prefillPhone).length >= 7));
+  const [tab, setTab] = useState<AppTab>("today");
+  const [bottomNav, setBottomNav] = useState<BottomNav>("home");
+  const [selectedDate, setSelectedDate] = useState(todayYmd());
+  const [detailPass, setDetailPass] = useState<CustomerPass | null>(null);
+  const [passDialogView, setPassDialogView] = useState<"detail" | "all">("detail");
+  const autoRan = useRef(false);
+  const urlBootRan = useRef(false);
+  const loginToastShown = useRef(false);
+
+  const passesQuery = useMyPassesQuery(mobile, unlocked);
+  const passes = passesQuery.data?.passes ?? [];
+
+  const qrBootQuery = useQuery({
+    queryKey: ["my-passes-qr", routePassId],
+    queryFn: () => getMyPassesFromQrToken({ qr_token: routePassId }),
+    enabled: passRouteBoot && !unlocked,
+    staleTime: 10_000,
+    placeholderData: keepPreviousData,
+  });
+
+  const qrBootPasses = qrBootQuery.data?.passes ?? [];
+  const displayPasses = unlocked ? (passes.length > 0 ? passes : qrBootPasses) : qrBootPasses;
+  const isFirstLoad =
+    (passRouteBoot && !unlocked && qrBootQuery.isLoading && !qrBootQuery.data) ||
+    (unlocked && passesQuery.isLoading && !passesQuery.data);
+  const [loginPending, setLoginPending] = useState(false);
+
+  useEffect(() => {
+    if (prefillPhone) {
+      setMobile(prefillPhone);
+      if (phoneDigits(prefillPhone).length >= 7) setUnlocked(true);
+      return;
+    }
+    if (typeof window === "undefined") return;
+    const stored = sessionStorage.getItem(PHONE_STORAGE_KEY);
+    if (stored) setMobile(stored);
+  }, [prefillPhone]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || urlBootRan.current) return;
+    const phone = searchParams.get("phone");
+    const qPass = searchParams.get("pass");
+    if (!phone && !(qPass && UUID_RE.test(qPass))) return;
+
+    urlBootRan.current = true;
+
+    if (phone) {
+      const trimmed = phone.trim();
+      sessionStorage.setItem(PHONE_STORAGE_KEY, trimmed);
+      setMobile(trimmed);
+      setUnlocked(true);
+      void queryClient.invalidateQueries({ queryKey: [MY_PASSES_QUERY_KEY] });
+    }
+
+    if (qPass && UUID_RE.test(qPass) && !routePassId) {
+      router.replace(`/my-passes/${encodeURIComponent(qPass)}`, { scroll: false });
+      return;
+    }
+
+    if (phone) {
+      router.replace("/my-passes", { scroll: false });
+    }
+  }, [searchParams, router, routePassId, queryClient]);
+
+  useEffect(() => {
+    if (!passRouteBoot || unlocked || !qrBootQuery.isSuccess) return;
+    const list = qrBootQuery.data?.passes ?? [];
+    if (list.length === 0) {
+      toast.error("Pass not found");
+      return;
+    }
+    setUnlocked(true);
+    const m0 = list[0]?.mobile;
+    if (m0) {
+      setMobile(m0);
+      if (typeof window !== "undefined") sessionStorage.setItem(PHONE_STORAGE_KEY, m0);
+    }
+    void queryClient.invalidateQueries({ queryKey: [MY_PASSES_QUERY_KEY] });
+    if (!loginToastShown.current) {
+      loginToastShown.current = true;
+      toast.success(welcomeBackGuestsMessage(welcomeBackGuestCount(list, routePassId)));
+    }
+  }, [passRouteBoot, unlocked, qrBootQuery.isSuccess, qrBootQuery.data, queryClient, routePassId]);
+
+  useEffect(() => {
+    if (prefillPhone || routePassId || !autoLookup || autoRan.current) return;
+    if (typeof window === "undefined") return;
+    const stored = sessionStorage.getItem(PHONE_STORAGE_KEY);
+    if (!stored || phoneDigits(stored).length < 7) return;
+    autoRan.current = true;
+    setMobile(stored);
+    setUnlocked(true);
+    void queryClient.invalidateQueries({ queryKey: [MY_PASSES_QUERY_KEY] });
+  }, [prefillPhone, routePassId, autoLookup, queryClient]);
+
+  useEffect(() => {
+    if (!detailPass) return;
+    const updated = displayPasses.find((p) => p.qr_token === detailPass.qr_token);
+    if (!updated) return;
+    const changed =
+      updated.status !== detailPass.status ||
+      updated.entered_at !== detailPass.entered_at ||
+      updated.exited_at !== detailPass.exited_at;
+    if (changed) setDetailPass(updated);
+  }, [displayPasses, detailPass]);
+
+  useEffect(() => {
+    if (!unlocked || !passAnchor || displayPasses.length === 0) return;
+    if (!UUID_RE.test(passAnchor)) return;
+    const match = displayPasses.find((p) => p.qr_token === passAnchor);
+    if (match) {
+      setDetailPass(match);
+      setTab("today");
+      setBottomNav("home");
+    } else if (passesQuery.isSuccess || qrBootQuery.isSuccess) {
+      toast.error("Pass not found");
+      router.replace("/my-passes");
+    }
+  }, [unlocked, passAnchor, displayPasses, router, passesQuery.isSuccess, qrBootQuery.isSuccess]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const m = mobile.trim();
-    if (m.length < 7) { toast.error("Enter a valid mobile number"); return; }
-    setLoading(true);
+    if (phoneDigits(m).length < 7) {
+      toast.error("Enter a valid mobile number");
+      return;
+    }
+    loginToastShown.current = false;
+    setLoginPending(true);
+    toast.loading("Finding your passes…", { id: "pass-lookup" });
+    if (typeof window !== "undefined") sessionStorage.setItem(PHONE_STORAGE_KEY, m);
+    setMobile(m);
+    setUnlocked(true);
+    await queryClient.invalidateQueries({ queryKey: [MY_PASSES_QUERY_KEY] });
     try {
-      const res = await getMyPasses({ mobile: m });
-      setPasses(res.passes);
-      setUnlocked(true);
-      if (res.passes.length === 0) toast.info("No passes found for this number");
-      else toast.success(`Found ${res.passes.length} pass${res.passes.length === 1 ? "" : "es"}`);
-    } catch (err: any) { toast.error(err?.message ?? "Lookup failed"); }
-    finally { setLoading(false); }
+      const result = await queryClient.fetchQuery({
+        queryKey: myPassesQueryKey(m),
+        queryFn: () => getMyPasses({ mobile: m }),
+      });
+      loginToastShown.current = true;
+      if (result.passes.length === 0) toast.info("No passes found for this number");
+      else
+        toast.success(
+          welcomeBackGuestsMessage(welcomeBackGuestCount(result.passes, passAnchor || undefined)),
+        );
+    } catch (err: unknown) {
+      toast.error(formatActionError(err) || "Lookup failed");
+    } finally {
+      setLoginPending(false);
+      toast.dismiss("pass-lookup");
+    }
   };
 
-  const reset = () => { setUnlocked(false); setPasses([]); };
+  const reset = useCallback(() => {
+    setUnlocked(false);
+    setDetailPass(null);
+    setBottomNav("home");
+    setTab("today");
+    autoRan.current = false;
+    urlBootRan.current = false;
+    loginToastShown.current = false;
+    if (typeof window !== "undefined") sessionStorage.removeItem(PHONE_STORAGE_KEY);
+    queryClient.removeQueries({ queryKey: [MY_PASSES_QUERY_KEY] });
+    if (routePassId && UUID_RE.test(routePassId)) {
+      router.push("/my-passes");
+    }
+  }, [queryClient, routePassId, router]);
 
-  const active = passes.filter((p) => p.isActive);
-  const inactive = passes.filter((p) => !p.isActive);
+  const displayName = useMemo(() => deriveFirstName(displayPasses), [displayPasses]);
+  const avatarInitial = displayName[0]?.toUpperCase() ?? "G";
+
+  const matchedPassFromUrl = useMemo(() => {
+    if (!passAnchor || !UUID_RE.test(passAnchor) || displayPasses.length === 0) return null;
+    return displayPasses.find((p) => p.qr_token === passAnchor) ?? null;
+  }, [passAnchor, displayPasses]);
+
+  const activePass = detailPass ?? matchedPassFromUrl;
+
+  useLayoutEffect(() => {
+    if (!matchedPassFromUrl) return;
+    if (detailPass?.qr_token === matchedPassFromUrl.qr_token) return;
+    setDetailPass(matchedPassFromUrl);
+  }, [matchedPassFromUrl, detailPass?.qr_token]);
+
+  const goToPassList = useCallback(() => {
+    setPassDialogView("detail");
+    setDetailPass(null);
+    if (passAnchor && UUID_RE.test(passAnchor)) {
+      router.push("/my-passes", { scroll: false });
+    }
+  }, [passAnchor, router]);
+
+  const openPass = useCallback(
+    (p: CustomerPass) => {
+      setDetailPass(p);
+      setPassDialogView("detail");
+      const path = `/my-passes/${encodeURIComponent(p.qr_token)}`;
+      if (routePassId !== p.qr_token) router.push(path, { scroll: false });
+    },
+    [routePassId, router],
+  );
+
+  const openAllPassesPanel = useCallback(() => {
+    setPassDialogView("all");
+  }, []);
+
+  const selectTab = (t: AppTab) => {
+    setTab(t);
+    if (t === "today") setBottomNav("home");
+    else if (t === "calendar") setBottomNav("calendar");
+  };
+
+  const selectBottomNav = (nav: BottomNav) => {
+    setBottomNav(nav);
+    if (nav === "home") setTab("today");
+    else if (nav === "calendar") setTab("calendar");
+  };
+
+  const showTopTabs = bottomNav !== "profile" && bottomNav !== "passes";
+  const showUnlocked = unlocked || (passRouteBoot && qrBootQuery.isSuccess && qrBootPasses.length > 0);
+
+  if (passRouteBoot && !showUnlocked) {
+    return (
+      <CustomerBeachShell className="font-[family-name:var(--font-body)]">
+        <motion.div className="grid min-h-screen place-items-center px-6">
+          {isFirstLoad ? (
+            <motion.div
+              className="h-12 w-12 animate-spin rounded-full border-2 border-[#00A9BC]/30 border-t-[#00A9BC]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            />
+          ) : (
+            <div className="max-w-sm rounded-[20px] bg-white p-8 text-center shadow-lg">
+              <p className="font-display text-lg font-extrabold text-[#102A43]">Couldn&apos;t open this pass</p>
+              <p className="mt-2 text-sm text-[#102A43]/75">Check the link or sign in with your mobile number.</p>
+              <Link
+                href="/my-passes"
+                className="mt-6 inline-flex rounded-full bg-[#00A9BC] px-6 py-3 text-sm font-bold text-white"
+              >
+                My passes
+              </Link>
+            </div>
+          )}
+        </motion.div>
+      </CustomerBeachShell>
+    );
+  }
+
+  if (
+    showUnlocked &&
+    anchorIsUuid &&
+    displayPasses.length > 0 &&
+    !activePass &&
+    (passesQuery.isLoading || qrBootQuery.isLoading)
+  ) {
+    return (
+      <CustomerBeachShell className="font-[family-name:var(--font-body)]">
+        <div className="grid min-h-screen place-items-center">
+          <motion.div
+            className="h-11 w-11 animate-spin rounded-full border-2 border-[#00A9BC]/30 border-t-[#00A9BC]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          />
+        </div>
+      </CustomerBeachShell>
+    );
+  }
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      <BeachBg variant="ocean" />
-
-      <header className="relative z-20 border-b border-foreground/5 bg-background/40 backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
-          <Link href="/" className="flex items-center gap-2 font-display text-lg font-extrabold">
-            <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-aqua/30 to-primary/20 text-aqua ring-1 ring-aqua/30">
-              <Ticket className="h-4 w-4" />
-            </span>
-            SummerSplash
-          </Link>
-          {unlocked && (
-            <button onClick={reset} className="inline-flex items-center gap-1.5 rounded-full bg-foreground/10 px-3 py-1.5 text-xs font-semibold hover:bg-foreground/15">
-              <LogOut className="h-3.5 w-3.5" /> Sign out
+    <CustomerBeachShell login={!showUnlocked} className="font-[family-name:var(--font-body)]">
+      <div className="relative mx-auto min-h-screen w-full max-w-[430px] text-[#0A4A52]">
+        <header className="flex items-center justify-between px-4 py-3.5 sm:px-5">
+          <SummerBrandMark href="/" className="drop-shadow-sm" />
+          {showUnlocked ? (
+            <button
+              type="button"
+              onClick={reset}
+              className="inline-flex items-center gap-1.5 rounded-full border-2 border-[#00A8B5] bg-white px-4 py-2 text-[11px] font-bold text-[#00A8B5] shadow-sm"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign out
             </button>
-          )}
-        </div>
-      </header>
-
-      <main className="relative z-10 mx-auto w-full max-w-5xl px-4 py-8 sm:py-12">
-        <AnimatePresence mode="wait">
-          {!unlocked ? (
-            <motion.div
-              key="login" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
-              className="mx-auto max-w-md"
-            >
-              <div className="mb-6 text-center">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-aqua/15 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.3em] text-aqua ring-1 ring-aqua/30">
-                  <ShieldCheck className="h-3 w-3" /> Phone access
-                </span>
-                <h1 className="mt-3 font-display text-3xl font-extrabold sm:text-4xl">My passes</h1>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Enter your mobile number to see every pass you've booked.
-                </p>
-              </div>
-
-              <form onSubmit={onSubmit} className="rounded-3xl glass-strong p-6 shadow-soft">
-                <Label className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                  <Phone className="h-3.5 w-3.5" /> Mobile number
-                </Label>
-                <IntlPhoneInput
-                  value={mobile} onChange={setMobile}
-                  placeholder="e.g. 9876543210"
-                  className="h-14"
-                  autoFocus
-                />
-                <button
-                  type="submit" disabled={loading}
-                  className="group mt-4 inline-flex h-14 w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset text-base font-bold text-foreground shadow-glow-sunset transition disabled:opacity-60"
-                >
-                  <Search className="h-5 w-5" />
-                  <span>{loading ? "Looking up…" : "Access my passes"}</span>
-                  <ArrowRight className="h-5 w-5 transition group-hover:translate-x-1" />
-                </button>
-                <p className="mt-3 text-center text-[11px] text-muted-foreground">
-                  We'll show passes booked with this exact number.
-                </p>
-              </form>
-            </motion.div>
           ) : (
-            <motion.div
-              key="list" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-              className="space-y-6"
-            >
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-aqua">Signed in · {mobile}</p>
-                  <h1 className="mt-1 font-display text-3xl font-extrabold">Your passes</h1>
-                </div>
-                <div className="flex gap-2 text-xs">
-                  <Stat label="Active" value={active.length} tone="bg-success/15 text-success" />
-                  <Stat label="Inactive" value={inactive.length} tone="bg-foreground/10 text-muted-foreground" />
-                </div>
-              </div>
+            <GuestBookButton />
+          )}
+        </header>
 
-              {passes.length === 0 ? (
-                <div className="rounded-2xl glass p-8 text-center">
-                  <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-foreground/10">
-                    <Ticket className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                  <p className="mt-3 font-display text-lg font-bold">No passes yet</p>
-                  <p className="mt-1 text-sm text-muted-foreground">We couldn't find any bookings for {mobile}.</p>
-                  <Link href="/register" className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-aqua/15 px-4 py-2 text-sm font-bold text-aqua ring-1 ring-aqua/30 hover:bg-aqua/25">
-                    Book a slot <ArrowRight className="h-4 w-4" />
-                  </Link>
+        {!showUnlocked ? (
+          <CustomerLogin
+            mobile={mobile}
+            onMobileChange={setMobile}
+            loading={loginPending}
+            onSubmit={onSubmit}
+          />
+        ) : (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <motion.div
+              className="px-4 sm:px-5"
+              initial={isFirstLoad ? { opacity: 0.6 } : false}
+              animate={{ opacity: 1 }}
+            >
+              <motion.div
+                className="flex items-center gap-3 rounded-[20px] bg-white p-3.5 shadow-[0_10px_32px_rgba(16,42,67,0.12)] ring-1 ring-black/[0.04]"
+                initial={isFirstLoad ? { opacity: 0, y: 8 } : false}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#c4b5fd] font-display text-lg font-extrabold text-[#4c1d95]">
+                  {avatarInitial}
+                </span>
+                <motion.div className="min-w-0 flex-1" layout>
+                  <p className="truncate text-[11px] font-medium text-[#102A43]/50">{mobile}</p>
+                  <p className="font-display text-base font-extrabold text-[#102A43]">
+                    Hey 👋 {displayName}
+                  </p>
+                </motion.div>
+              </motion.div>
+
+              {showTopTabs && (
+                <div className="mt-4 flex rounded-full bg-white p-1 shadow-[0_8px_24px_rgba(16,42,67,0.08)] ring-1 ring-black/[0.04]">
+                  {TABS.map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => selectTab(t.key)}
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-2.5 text-[12px] font-bold transition ${
+                        tab === t.key ? "bg-[#00A9BC] text-white shadow-md" : "text-[#102A43]/45"
+                      }`}
+                    >
+                      {t.icon}
+                      {t.label}
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <>
-                  {active.length > 0 && (
-                    <Section title="Active" icon={<CheckCircle2 className="h-4 w-4" />} accent="text-success">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {active.map((p) => <PassCard key={p.id} pass={p} />)}
-                      </div>
-                    </Section>
-                  )}
-                  {inactive.length > 0 && (
-                    <Section title="Inactive / past" icon={<Clock className="h-4 w-4" />} accent="text-muted-foreground">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {inactive.map((p) => <PassCard key={p.id} pass={p} />)}
-                      </div>
-                    </Section>
-                  )}
-                </>
               )}
             </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
-    </div>
+
+            {isFirstLoad ? (
+              <div className="px-4 py-8 sm:px-5">
+                <div className="space-y-3">
+                  <motion.div
+                    className="h-28 animate-pulse rounded-[20px] bg-white/80"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  />
+                  <motion.div
+                    className="h-20 animate-pulse rounded-[20px] bg-white/60"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.05 }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <>
+                {bottomNav === "profile" ? (
+                  <CustomerProfileTab
+                    mobile={mobile}
+                    displayName={displayName}
+                    passCount={displayPasses.length}
+                    onSignOut={reset}
+                  />
+                ) : bottomNav === "passes" ? (
+                  <CustomerPassesListTab passes={displayPasses} onOpenPass={openPass} />
+                ) : (
+                  <>
+                    {tab === "today" && (
+                      <CustomerOverviewTab
+                        passes={displayPasses}
+                        firstName={displayName}
+                        onOpenPass={openPass}
+                      />
+                    )}
+                    {tab === "calendar" && (
+                      <CustomerCalendarTab passes={displayPasses} onOpenPass={openPass} />
+                    )}
+                    {tab === "timeline" && (
+                      <CustomerTimelineTab
+                        passes={displayPasses}
+                        selectedDate={selectedDate}
+                        onSelectDate={setSelectedDate}
+                        onOpenPass={openPass}
+                      />
+                    )}
+                  </>
+                )}
+
+                {displayPasses.length === 0 && bottomNav !== "profile" && (
+                  <motion.div
+                    className="px-4 pb-24 text-center"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <Link
+                      href="/register"
+                      className="mt-4 inline-flex rounded-full bg-[#00A9BC] px-6 py-3 font-bold text-white shadow-lg"
+                    >
+                      Book your first slot
+                    </Link>
+                  </motion.div>
+                )}
+              </>
+            )}
+
+            <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-black/[0.06] bg-white pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_24px_rgba(16,42,67,0.08)]">
+              <motion.div
+                className="mx-auto flex w-full max-w-[430px] items-stretch justify-around px-1 pt-1"
+                layout
+              >
+                <BottomNavButton
+                  active={bottomNav === "home"}
+                  icon={<Home className="h-5 w-5" />}
+                  label="Home"
+                  onClick={() => selectBottomNav("home")}
+                />
+                <BottomNavButton
+                  active={bottomNav === "calendar"}
+                  icon={<CalendarDays className="h-5 w-5" />}
+                  label="Calendar"
+                  onClick={() => selectBottomNav("calendar")}
+                />
+                <BottomNavButton
+                  active={bottomNav === "passes"}
+                  icon={<Ticket className="h-5 w-5" />}
+                  label="Passes"
+                  onClick={() => selectBottomNav("passes")}
+                />
+                <BottomNavButton
+                  active={bottomNav === "profile"}
+                  icon={<User className="h-5 w-5" />}
+                  label="Profile"
+                  onClick={() => selectBottomNav("profile")}
+                />
+              </motion.div>
+            </nav>
+          </motion.div>
+        )}
+
+        <Dialog
+          open={!!activePass}
+          onOpenChange={(open) => {
+            if (!open) goToPassList();
+          }}
+        >
+          <DialogContent
+            hideClose
+            overlayClassName="bg-black/55"
+            className="flex max-h-[min(92vh,820px)] w-[min(calc(100vw-2rem),430px)] max-w-[430px] flex-col gap-0 overflow-hidden border-0 bg-white p-0 shadow-2xl sm:rounded-[1.5rem]"
+          >
+            {activePass && passDialogView === "detail" ? (
+              <CustomerPassDetail pass={activePass} onAllPasses={openAllPassesPanel} embedded />
+            ) : activePass ? (
+              <CustomerAllPassesPanel
+                passes={displayPasses}
+                currentQrToken={activePass.qr_token}
+                onOpenPass={openPass}
+                onBack={() => setPassDialogView("detail")}
+              />
+            ) : null}
+          </DialogContent>
+        </Dialog>
+      </div>
+    </CustomerBeachShell>
   );
 }
 
-function Section({ title, icon, accent, children }: { title: string; icon: React.ReactNode; accent: string; children: React.ReactNode }) {
+function BottomNavButton({
+  icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
-    <section>
-      <h2 className={`mb-2.5 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wider ${accent}`}>
-        {icon} {title}
-      </h2>
-      {children}
-    </section>
-  );
-}
-
-function Stat({ label, value, tone }: { label: string; value: number; tone: string }) {
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-bold ${tone}`}>
-      <span className="tabular-nums">{value}</span>
-      <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">{label}</span>
-    </span>
-  );
-}
-
-function PassCard({ pass }: { pass: Pass }) {
-  const tone =
-    pass.liveStatus === "Active" ? "bg-aqua/15 text-aqua ring-aqua/30" :
-    pass.liveStatus === "Inside" ? "bg-success/15 text-success ring-success/30" :
-    pass.liveStatus === "Exited" ? "bg-foreground/10 text-muted-foreground ring-foreground/20" :
-    "bg-coral/15 text-coral ring-coral/30";
-  const Icon = pass.liveStatus === "Active" ? CheckCircle2 :
-    pass.liveStatus === "Inside" ? ShieldCheck :
-    pass.liveStatus === "Exited" ? LogOut : AlertTriangle;
-  return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      className="relative overflow-hidden rounded-2xl glass-strong p-4 shadow-soft">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-muted-foreground">{pass.event_name ?? "Event"}</p>
-          <h3 className="mt-0.5 truncate font-display text-base font-extrabold">{pass.slot_name ?? "Slot"}</h3>
-        </div>
-        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ${tone}`}>
-          <Icon className="h-3 w-3" /> {pass.liveStatus}
-        </span>
-      </div>
-
-      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-        <Info icon={<Calendar className="h-3 w-3" />} label="Date">
-          {pass.event_date ? format(new Date(pass.event_date), "MMM d, yyyy") : "—"}
-        </Info>
-        <Info icon={<Clock className="h-3 w-3" />} label="Time">
-          {pass.slot_starts_at ? format(new Date(pass.slot_starts_at), "p") : "—"}
-        </Info>
-        <Info icon={<Users className="h-3 w-3" />} label="Guests">
-          <span className="font-display text-sm font-extrabold tabular-nums">{pass.guest_count}</span>
-        </Info>
-        <Info icon={<Ticket className="h-3 w-3" />} label="Booked">
-          {format(new Date(pass.created_at), "MMM d")}
-        </Info>
-      </div>
-
-      <div className="mt-3 flex gap-2">
-        <Link href={`/pass/${pass.qr_token}`} target="_blank"
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-aqua/15 px-3 py-2 text-xs font-bold text-aqua ring-1 ring-aqua/30 hover:bg-aqua/25">
-          <QrCode className="h-3.5 w-3.5" /> View pass
-        </Link>
-        <Link href={`/pass/${pass.qr_token}`} target="_blank"
-          className="inline-flex items-center justify-center gap-1 rounded-xl bg-foreground/10 px-3 py-2 text-xs font-semibold hover:bg-foreground/15">
-          <ExternalLink className="h-3.5 w-3.5" />
-        </Link>
-      </div>
-    </motion.div>
-  );
-}
-
-function Info({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg bg-foreground/5 px-2.5 py-1.5">
-      <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-        {icon} {label}
-      </div>
-      <div className="mt-0.5 truncate text-foreground">{children}</div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-bold transition ${
+        active ? "text-[#00A9BC]" : "text-[#102A43]/40"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }

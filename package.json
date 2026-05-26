@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "push:pr": "node scripts/push-pr.mjs"
+    "push:pr": "node scripts/push-pr.mjs",
+    "check:supabase": "node scripts/check-supabase-keys.mjs",
+    "db:push": "supabase db push"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -38,6 +40,8 @@
     "@radix-ui/react-toggle": "^1.1.10",
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@scandit/web-datacapture-barcode": "^8.4.0",
+    "@scandit/web-datacapture-core": "^8.4.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.105.4",
     "@tanstack/react-query": "^5.83.0",
@@ -60,19 +64,20 @@
     "react-phone-number-input": "^3.4.16",
     "react-resizable-panels": "^4.6.5",
     "recharts": "^2.15.4",
+    "server-only": "^0.0.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "vaul": "^1.1.2",
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.0",
     "@eslint/js": "^9.32.0",
     "@tailwindcss/postcss": "^4.2.1",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "eslint": "^9.32.0",
-    "@eslint/eslintrc": "^3.3.0",
     "eslint-config-next": "^15.5.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",

@@ -1,7 +1,6 @@
-import { RoleLogin } from "@/components/role-login";
+import { redirect } from "next/navigation";
+import { UNIFIED_LOGIN_PATH } from "@/lib/staff-auth";
 
 export default function AdminLoginPage() {
-  return (
-    <RoleLogin role="admin" title="Admin Login" subtitle="Full access to the SummerSplash admin panel." redirectTo="/admin" />
-  );
+  redirect(UNIFIED_LOGIN_PATH);
 }

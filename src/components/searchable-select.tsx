@@ -9,6 +9,8 @@ export type SelectOption = {
   label: React.ReactNode;
   /** Plain-text representation used for fuzzy search */
   search?: string;
+  /** Compact label for the closed trigger when `label` is multi-line or wide */
+  triggerLabel?: React.ReactNode;
 };
 
 interface SearchableSelectProps {
@@ -38,6 +40,11 @@ export function SearchableSelect({
   const [open, setOpen] = React.useState(false);
   const selected = options.find((o) => o.value === value);
 
+  const triggerDisplay = selected
+    ? selected.triggerLabel ??
+      (typeof selected.label === "string" ? selected.label : selected.search ?? selected.value)
+    : placeholder;
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -50,7 +57,7 @@ export function SearchableSelect({
           )}
         >
           <span className={cn("truncate", !selected && "text-muted-foreground font-normal")}>
-            {selected ? selected.label : placeholder}
+            {triggerDisplay}
           </span>
           <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-foreground" />
         </button>
@@ -58,7 +65,7 @@ export function SearchableSelect({
       <PopoverContent
         align="start"
         sideOffset={6}
-        className="z-50 w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-2xl border border-foreground/10 bg-popover/95 p-0 text-popover-foreground shadow-2xl backdrop-blur-xl"
+        className="z-50 min-w-[var(--radix-popover-trigger-width)] w-max max-w-[min(20rem,90vw)] overflow-hidden rounded-2xl border border-foreground/10 bg-popover/95 p-0 text-popover-foreground shadow-2xl backdrop-blur-xl"
       >
         <Command className="bg-transparent">
           {searchable && (
@@ -86,12 +93,12 @@ export function SearchableSelect({
                       setOpen(false);
                     }}
                     className={cn(
-                      "group flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2.5 text-sm aria-selected:bg-aqua/15 aria-selected:text-foreground",
+                      "group flex cursor-pointer items-start gap-2 rounded-lg px-3 py-2.5 text-sm aria-selected:bg-aqua/15 aria-selected:text-foreground",
                       isActive && "bg-aqua/10 text-foreground",
                     )}
                   >
-                    <span className="flex-1 truncate">{o.label}</span>
-                    {isActive && <Check className="h-4 w-4 text-aqua" />}
+                    <span className="min-w-0 flex-1 whitespace-normal leading-snug">{o.label}</span>
+                    {isActive && <Check className="mt-0.5 h-4 w-4 shrink-0 text-aqua" />}
                   </CommandItem>
                 );
               })}

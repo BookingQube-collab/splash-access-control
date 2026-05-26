@@ -1,613 +1,136 @@
 "use client";
 
-import Link from "next/link";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import dynamic from "next/dynamic";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { RoleGuard } from "@/components/role-guard";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { toast } from "sonner";
-import { format } from "date-fns";
-import { supabase } from "@/integrations/supabase/client";
+import { AdminNavigationProvider } from "@/components/admin/admin-navigation";
 import {
-  CalendarDays, Clock4, ListChecks, BarChart3, Users2, Settings, LogOut,
-  Activity, Plus, Trash2, ExternalLink, ShieldCheck, Waves, ScanLine,
-} from "lucide-react";
-import {
-  adminListEvents, adminUpsertEvent, adminDeleteEvent,
-  adminListSlots, adminUpsertSlot, adminDeleteSlot,
-  adminListRegistrations,
-  adminGetSettings, adminSaveSettings,
-  adminListUsers, adminCreateUser, adminSetRole, adminDeleteUser,
-  adminReports,
-} from "@/lib/admin.functions";
-import { getDashboardCounts } from "@/lib/summersplash.functions";
-import { BeachBg } from "@/components/beach-bg";
-import { AnimatedCount } from "@/components/animated-count";
-import { SearchableSelect } from "@/components/searchable-select";
-import { formatActionError } from "@/lib/utils";
+  AdminShell,
+  parseAdminTabParam,
+  type AdminTabKey,
+} from "@/components/admin/admin-shell";
+import { AdminOverviewSection } from "@/components/admin/admin-overview-section";
+import { ADMIN_CARD } from "@/components/admin/admin-theme";
+import { cn } from "@/lib/utils";
+
+function AdminTabLoading() {
+  return (
+    <div className={cn(ADMIN_CARD, "py-16 text-center text-sm text-[#64748b]")}>
+      Loading…
+    </div>
+  );
+}
+
+const AdminBookingsSection = dynamic(
+  () =>
+    import("@/components/admin/admin-bookings-section").then((m) => ({
+      default: m.AdminBookingsSection,
+    })),
+  { loading: AdminTabLoading },
+);
+
+const AdminEventsSection = dynamic(
+  () =>
+    import("@/components/admin/admin-events-section").then((m) => ({
+      default: m.AdminEventsSection,
+    })),
+  { loading: AdminTabLoading },
+);
+
+const AdminSlotsSection = dynamic(
+  () =>
+    import("@/components/admin/admin-slots-section").then((m) => ({
+      default: m.AdminSlotsSection,
+    })),
+  { loading: AdminTabLoading },
+);
+
+const AdminGuestsSection = dynamic(
+  () =>
+    import("@/components/admin/admin-guests-section").then((m) => ({
+      default: m.AdminGuestsSection,
+    })),
+  { loading: AdminTabLoading },
+);
+
+const AdminReportsTab = dynamic(
+  () =>
+    import("@/components/admin/admin-reports-tab").then((m) => ({
+      default: m.AdminReportsTab,
+    })),
+  { loading: AdminTabLoading },
+);
+
+const AdminSettingsTab = dynamic(
+  () =>
+    import("@/components/admin/admin-settings-tab").then((m) => ({
+      default: m.AdminSettingsTab,
+    })),
+  { loading: AdminTabLoading },
+);
 
 export default function AdminPage() {
   return (
-    <RoleGuard role="admin" loginPath="/login/admin">
-      <Admin />
+    <RoleGuard role="admin" bare>
+      <Suspense
+        fallback={
+          <div className={cn(ADMIN_CARD, "m-8 py-16 text-center text-sm text-[#64748b]")}>Loading…</div>
+        }
+      >
+        <Admin />
+      </Suspense>
     </RoleGuard>
   );
 }
 
-type TabKey = "overview" | "events" | "slots" | "registrations" | "reports" | "users" | "settings";
-
-const NAV: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-  { key: "overview", label: "Overview", icon: <Activity className="h-4 w-4" /> },
-  { key: "events", label: "Events", icon: <CalendarDays className="h-4 w-4" /> },
-  { key: "slots", label: "Slots", icon: <Clock4 className="h-4 w-4" /> },
-  { key: "registrations", label: "Registrations", icon: <ListChecks className="h-4 w-4" /> },
-  { key: "reports", label: "Reports", icon: <BarChart3 className="h-4 w-4" /> },
-  { key: "users", label: "Users & Roles", icon: <Users2 className="h-4 w-4" /> },
-  { key: "settings", label: "Settings", icon: <Settings className="h-4 w-4" /> },
-];
+function scrollToAdminSchedule() {
+  document.getElementById("admin-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 function Admin() {
-  const [tab, setTab] = useState<TabKey>("overview");
-  const signOut = async () => { await supabase.auth.signOut(); window.location.href = "/"; };
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<AdminTabKey>(() => parseAdminTabParam(searchParams.get("tab")));
 
-  return (
-    <div className="relative min-h-screen">
-      <BeachBg variant="ocean" />
-
-      <div className="relative z-10 mx-auto flex max-w-[1400px] gap-6 px-4 py-6 lg:px-6">
-        {/* Sidebar */}
-        <aside className="sticky top-6 hidden h-[calc(100vh-3rem)] w-60 shrink-0 flex-col rounded-3xl glass-strong p-4 lg:flex">
-          <div className="mb-6 flex items-center gap-2 px-2">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-ocean shadow-glow-aqua">
-              <Waves className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <div>
-              <div className="font-display text-base font-bold leading-tight">SummerSplash</div>
-              <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Admin</div>
-            </div>
-          </div>
-          <nav className="flex-1 space-y-1">
-            {NAV.map((n) => {
-              const active = tab === n.key;
-              return (
-                <button key={n.key} onClick={() => setTab(n.key)}
-                  className={`relative flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition ${
-                    active ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
-                  }`}>
-                  {active && (
-                    <motion.span layoutId="navdot" className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-aqua shadow-glow-aqua" />
-                  )}
-                  {n.icon}{n.label}
-                </button>
-              );
-            })}
-          </nav>
-          <div className="mt-4 border-t border-foreground/10 pt-3">
-            <button onClick={signOut} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground">
-              <LogOut className="h-4 w-4" /> Sign out
-            </button>
-          </div>
-        </aside>
-
-        {/* Main */}
-        <main className="min-w-0 flex-1">
-          {/* Topbar */}
-          <header className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl glass-strong px-5 py-3">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-aqua" />
-              <span className="text-sm font-semibold">{NAV.find(n => n.key === tab)?.label}</span>
-            </div>
-            {/* Mobile tabs */}
-            <div className="flex w-full gap-1 overflow-x-auto scrollbar-none lg:hidden">
-              {NAV.map(n => (
-                <button key={n.key} onClick={() => setTab(n.key)}
-                  className={`shrink-0 rounded-lg px-3 py-1.5 text-xs ${tab === n.key ? "bg-foreground/10" : "text-muted-foreground"}`}>
-                  {n.label}
-                </button>
-              ))}
-            </div>
-            <div className="hidden items-center gap-2 lg:flex">
-              <Link href="/dashboard" className="rounded-lg glass px-3 py-1.5 text-xs font-semibold hover-glow">Live dashboard</Link>
-              <Link href="/scanner" className="inline-flex items-center gap-1.5 rounded-lg glass px-3 py-1.5 text-xs font-semibold hover-glow">
-                <ScanLine className="h-3 w-3" /> Scanner
-              </Link>
-            </div>
-          </header>
-
-          <AnimatePresence mode="wait">
-            <motion.div key={tab}
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-              {tab === "overview" && <DashTab />}
-              {tab === "events" && <EventsTab />}
-              {tab === "slots" && <SlotsTab />}
-              {tab === "registrations" && <RegistrationsTab />}
-              {tab === "reports" && <ReportsTab />}
-              {tab === "users" && <UsersTab />}
-              {tab === "settings" && <SettingsTab />}
-            </motion.div>
-          </AnimatePresence>
-        </main>
-      </div>
-    </div>
-  );
-}
-
-function Panel({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section className="rounded-3xl glass-strong p-6 shadow-soft">
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <h2 className="font-display text-xl font-bold">{title}</h2>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function EventsTab() {
-  const qc = useQueryClient();
-  const { data } = useQuery({ queryKey: ["a-events"], queryFn: () => adminListEvents() });
-  const today = new Date().toISOString().slice(0, 10);
-  const [name, setName] = useState("SummerSplash");
-  const [start, setStart] = useState(today);
-  const [end, setEnd] = useState(today);
-  const m = useMutation({
-    mutationFn: () => adminUpsertEvent({ name, start_date: start, end_date: end, is_active: true }),
-    onSuccess: () => { toast.success("Event saved"); qc.invalidateQueries({ queryKey: ["a-events"] }); }
-  });
-  return (
-    <Panel title="Events">
-      <div className="mb-5 grid gap-2 md:grid-cols-[1fr_160px_160px_auto]">
-        <Input placeholder="Event name" value={name} onChange={(e) => setName(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-        <div>
-          <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Start</Label>
-          <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-        </div>
-        <div>
-          <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">End</Label>
-          <Input type="date" value={end} min={start} onChange={(e) => setEnd(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-        </div>
-        <button onClick={() => m.mutate()} className="inline-flex items-center justify-center gap-1.5 self-end rounded-xl bg-aqua px-5 h-11 text-sm font-semibold text-primary-foreground shadow-glow-aqua">
-          <Plus className="h-4 w-4" /> Add
-        </button>
-      </div>
-      <div className="space-y-2">
-        {(data?.events ?? []).map((e: any) => (
-          <div key={e.id} className="flex items-center justify-between rounded-2xl glass p-4">
-            <div>
-              <div className="font-semibold">{e.name}</div>
-              <div className="text-xs text-muted-foreground">
-                {format(new Date(e.start_date ?? e.event_date), "PP")} → {format(new Date(e.end_date ?? e.event_date), "PP")} ·
-                <span className={`ml-1 inline-flex items-center gap-1 ${e.is_active ? "text-success" : "text-muted-foreground"}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${e.is_active ? "bg-success" : "bg-muted-foreground"}`} />
-                  {e.is_active ? "Active" : "Inactive"}
-                </span>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={async () => { await adminUpsertEvent({ id: e.id, name: e.name, start_date: e.start_date ?? e.event_date, end_date: e.end_date ?? e.event_date, is_active: !e.is_active }); qc.invalidateQueries({ queryKey: ["a-events"] }); }}
-                className="rounded-lg glass px-3 py-1.5 text-xs font-semibold hover-glow">{e.is_active ? "Deactivate" : "Activate"}</button>
-              <button onClick={async () => { if (confirm("Delete?")) { await adminDeleteEvent({ id: e.id }); qc.invalidateQueries({ queryKey: ["a-events"] }); } }}
-                className="rounded-lg bg-destructive/15 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/25">
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-        ))}
-        {(data?.events ?? []).length === 0 && <p className="text-sm text-muted-foreground">No events yet.</p>}
-      </div>
-    </Panel>
-  );
-}
-
-
-
-function SlotsTab() {
-  const qc = useQueryClient();
-  const { data: events } = useQuery({ queryKey: ["a-events"], queryFn: () => adminListEvents() });
-  const { data } = useQuery({ queryKey: ["a-slots"], queryFn: () => adminListSlots() });
-
-  const [eventId, setEventId] = useState("");
-  const [name, setName] = useState("");
-  const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [startTime, setStartTime] = useState("10:00");
-  const [endTime, setEndTime] = useState("13:00");
-  const [cap, setCap] = useState(50);
-
-  const selectedEvent = (events?.events ?? []).find((e: any) => e.id === eventId);
-
-  // Sync slot date defaults when an event is picked
   useEffect(() => {
-    if (selectedEvent) {
-      setStartDate(format(new Date(selectedEvent.start_date ?? selectedEvent.event_date), "yyyy-MM-dd"));
-      setEndDate(format(new Date(selectedEvent.end_date ?? selectedEvent.event_date), "yyyy-MM-dd"));
-    }
-  }, [eventId]); // eslint-disable-line react-hooks/exhaustive-deps
+    setTab(parseAdminTabParam(searchParams.get("tab")));
+  }, [searchParams]);
 
-  const handleCreate = async () => {
-    if (!eventId || !name) return toast.error("Pick an event and slot name");
-    if (endDate < startDate) return toast.error("End date must be on or after start date");
-    if (endTime <= startTime) return toast.error("End time must be after start time");
-    try {
-      const starts_at = new Date(`${startDate}T${startTime}:00`).toISOString();
-      const ends_at = new Date(`${endDate}T${endTime}:00`).toISOString();
-      await adminUpsertSlot({ event_id: eventId, name, starts_at, ends_at, capacity: cap });
-      qc.invalidateQueries({ queryKey: ["a-slots"] });
-      toast.success("Slot created");
-      setName("");
-    } catch (e: any) { toast.error(e.message); }
-  };
-
-  return (
-    <Panel title="Slots & Capacity">
-      <div className="mb-6 rounded-2xl glass p-5 space-y-4">
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Event</Label>
-            <SearchableSelect
-              value={eventId}
-              onChange={setEventId}
-              placeholder="Select an event…"
-              searchPlaceholder="Search events…"
-              options={(events?.events ?? []).map((e: any) => {
-                const label = `${e.name} · ${format(new Date(e.start_date ?? e.event_date), "MMM d")} → ${format(new Date(e.end_date ?? e.event_date), "MMM d")}`;
-                return { value: e.id, label, search: label };
-              })}
-            />
-          </div>
-          <div>
-            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Slot name</Label>
-            <Input placeholder="e.g. Park Guest" value={name} onChange={(e) => setName(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Start date</Label>
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-          </div>
-          <div>
-            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">End date</Label>
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-3">
-          <div>
-            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Slot start time</Label>
-            <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-          </div>
-          <div>
-            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Slot end time</Label>
-            <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-          </div>
-          <div>
-            <Label className="mb-1 block text-[10px] uppercase tracking-wider text-muted-foreground">Capacity</Label>
-            <Input type="number" min={1} value={cap} onChange={(e) => setCap(Number(e.target.value))} className="h-11 border-0 bg-foreground/5" />
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-foreground/5 pt-4">
-          <p className="text-xs text-muted-foreground">
-            One slot · <b className="text-foreground">{format(new Date(`${startDate}T00:00:00`), "MMM d")}</b> – <b className="text-foreground">{format(new Date(`${endDate}T00:00:00`), "MMM d")}</b> · {startTime}–{endTime} · cap {cap}. Registration auto-closes when full.
-          </p>
-          <button onClick={handleCreate} className="inline-flex items-center gap-1.5 rounded-xl bg-sunset px-5 h-11 text-sm font-semibold text-foreground shadow-glow-sunset">
-            <Plus className="h-4 w-4" /> Create slot
-          </button>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        {(data?.slots ?? []).map((s: any) => {
-          const sa = new Date(s.starts_at), ea = new Date(s.ends_at);
-          return (
-            <div key={s.id} className="flex items-center justify-between rounded-2xl glass p-4">
-              <div>
-                <div className="font-semibold">{s.name} <span className="text-muted-foreground font-normal">— {s.events?.name}</span></div>
-                <div className="text-xs text-muted-foreground">
-                  {format(sa, "MMM d, yyyy")} → {format(ea, "MMM d, yyyy")} · {format(sa, "p")} – {format(ea, "p")} · cap {s.capacity}
-                </div>
-              </div>
-              <button onClick={async () => { if (confirm("Delete?")) { await adminDeleteSlot({ id: s.id }); qc.invalidateQueries({ queryKey: ["a-slots"] }); } }}
-                className="rounded-lg bg-destructive/15 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/25">
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          );
-        })}
-        {(data?.slots ?? []).length === 0 && <p className="text-sm text-muted-foreground">No slots yet.</p>}
-      </div>
-    </Panel>
-  );
-}
-
-function RegistrationsTab() {
-  const { data } = useQuery({ queryKey: ["a-regs"], queryFn: () => adminListRegistrations() });
-  return (
-    <Panel title="Registrations">
-      <div className="overflow-x-auto rounded-2xl glass">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-              {["Name", "Mobile", "Slot", "Guests", "Status", "When", ""].map(h => (
-                <th key={h} className="p-3">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {(data?.registrations ?? []).map((r: any) => (
-              <tr key={r.id} className="border-t border-foreground/5">
-                <td className="p-3 font-medium">{r.customer_name}</td>
-                <td className="p-3">{r.mobile}</td>
-                <td className="p-3">{r.slots?.name}</td>
-                <td className="p-3">{r.guest_count}</td>
-                <td className="p-3"><StatusPill status={r.status} /></td>
-                <td className="p-3 text-xs text-muted-foreground">{format(new Date(r.created_at), "PPp")}</td>
-                <td className="p-3">
-                  <a href={`/pass/${r.qr_token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                    Pass <ExternalLink className="h-3 w-3" />
-                  </a>
-                </td>
-              </tr>
-            ))}
-            {(data?.registrations ?? []).length === 0 && (
-              <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">No registrations yet.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </Panel>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    Active: "bg-aqua/15 text-aqua",
-    Inside: "bg-success/15 text-success",
-    Exited: "bg-foreground/10 text-muted-foreground",
-    Expired: "bg-destructive/15 text-destructive",
-  };
-  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${map[status] ?? "bg-foreground/10"}`}>{status}</span>;
-}
-
-function DashTab() {
-  const [eventId, setEventId] = useState<string>("");
-  const { data } = useQuery({
-    queryKey: ["a-dash", eventId],
-    queryFn: () => getDashboardCounts(eventId ? { eventId } : {}),
-    refetchInterval: 5000,
-  });
-  const events = (data as any)?.events ?? [];
-  const slots = data?.slots ?? [];
-  const totals = slots.reduce(
-    (a: any, s: any) => ({
-      cap: a.cap + (s.total_capacity ?? s.capacity * (s.event_days ?? 1)),
-      inside: a.inside + s.entered, active: a.active + s.active, invalid: a.invalid + s.invalid,
-    }), { cap: 0, inside: 0, active: 0, invalid: 0 });
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Event</label>
-        <select
-          value={eventId}
-          onChange={(e) => setEventId(e.target.value)}
-          className="rounded-xl border border-foreground/10 bg-background/40 px-3 py-2 text-sm outline-none focus:border-primary/40"
-        >
-          <option value="">Active (today)</option>
-          {events.map((e: any) => (
-            <option key={e.id} value={e.id}>{e.name} · {e.days}d ({e.start_date} → {e.end_date})</option>
-          ))}
-        </select>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Capacity (total)" value={totals.cap} hue="bg-primary/15 text-primary" />
-        <Stat label="Inside now" value={totals.inside} hue="bg-success/15 text-success" pulse />
-        <Stat label="Active passes" value={totals.active} hue="bg-aqua/15 text-aqua" />
-        <Stat label="Invalid scans" value={totals.invalid} hue="bg-destructive/15 text-destructive" />
-      </div>
-      <Panel title="Live slot occupancy">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {slots.map((s: any) => {
-            const occ = Math.min(100, Math.round((s.entered / Math.max(1, s.capacity)) * 100));
-            return (
-              <motion.div key={s.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl glass p-4 hover-glow">
-                <div className="flex items-baseline justify-between">
-                  <div className="font-display font-semibold">{s.name}</div>
-                  <div className="text-right text-xs text-muted-foreground">
-                    <div>{s.remaining}/{s.capacity} <span className="opacity-60">today</span></div>
-                    <div className="text-[10px] opacity-70">Total {s.total_capacity ?? s.capacity} ({s.event_days ?? 1}d)</div>
-                  </div>
-                </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-foreground/10">
-                  <motion.div initial={{ width: 0 }} animate={{ width: `${occ}%` }} transition={{ duration: 0.6 }}
-                    className={`h-full rounded-full ${occ > 85 ? "bg-coral" : "bg-gradient-to-r from-aqua to-primary"}`} />
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
-                  <span className="rounded-md bg-sunset/10 px-2 py-1 text-sunset">Booked <b className="ml-1 text-foreground"><AnimatedCount value={s.booked ?? 0} /></b></span>
-                  <span className="rounded-md bg-success/10 px-2 py-1 text-success">Inside <b className="ml-1 text-foreground"><AnimatedCount value={s.entered} /></b></span>
-                  <span>Active <b className="text-foreground"><AnimatedCount value={s.active} /></b></span>
-                  <span>Exited <b className="text-foreground"><AnimatedCount value={s.exited} /></b></span>
-                </div>
-              </motion.div>
-            );
-          })}
-          {slots.length === 0 && <p className="col-span-full text-sm text-muted-foreground">No active slots.</p>}
-        </div>
-      </Panel>
-    </div>
-  );
-}
-
-function Stat({ label, value, hue, pulse }: { label: string; value: number; hue: string; pulse?: boolean }) {
-  return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl glass p-5 hover-glow">
-      <div className="flex items-center justify-between">
-        <span className={`grid h-9 w-9 place-items-center rounded-xl ${hue}`}><Activity className="h-4 w-4" /></span>
-        {pulse && <span className="h-2 w-2 animate-pulse rounded-full bg-success" />}
-      </div>
-      <div className="mt-3 text-3xl font-extrabold tracking-tight"><AnimatedCount value={value} /></div>
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-    </motion.div>
-  );
-}
-
-function ReportsTab() {
-  const { data } = useQuery({ queryKey: ["a-reports"], queryFn: () => adminReports() });
-  if (!data) return null;
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-3 md:grid-cols-3">
-        <BigStat label="Total registrations" value={data.totalReg} />
-        <BigStat label="Total guests" value={data.totalGuests} />
-        <BigStat label="Scans (valid / invalid)" value={`${data.validScans} / ${data.invalidScans}`} danger={data.invalidScans > 0} />
-      </div>
-      <Panel title="By status">
-        <div className="flex flex-wrap gap-2">
-          {Object.entries(data.byStatus).map(([k, v]) => (
-            <span key={k} className="rounded-full glass px-4 py-1.5 text-sm">
-              <span className="text-muted-foreground">{k}:</span> <b className="ml-1">{v as number}</b>
-            </span>
-          ))}
-        </div>
-      </Panel>
-    </div>
-  );
-}
-
-function BigStat({ label, value, danger }: { label: string; value: number | string; danger?: boolean }) {
-  return (
-    <div className="rounded-2xl glass-strong p-6">
-      <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={`mt-2 text-4xl font-extrabold ${danger ? "text-destructive" : "text-gradient-ocean"}`}>{value}</div>
-    </div>
-  );
-}
-
-function UsersTab() {
-  const qc = useQueryClient();
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["a-users"],
-    queryFn: () => adminListUsers(),
-  });
-  const [email, setEmail] = useState(""); const [pw, setPw] = useState("");
-  const [role, setRoleV] = useState<"admin" | "dashboard" | "pos" | "scanner">("scanner");
-  const allRoles: ("admin" | "dashboard" | "pos" | "scanner")[] = ["admin", "dashboard", "pos", "scanner"];
-  return (
-    <Panel title="Users & Roles">
-      {isError && (
-        <p className="mb-4 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {formatActionError(error)}
-        </p>
-      )}
-      <div className="mb-5 grid gap-2 md:grid-cols-4">
-        <Input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-        <Input placeholder="Password" type="password" value={pw} onChange={(e) => setPw(e.target.value)} className="h-11 border-0 bg-foreground/5" />
-        <SearchableSelect
-          value={role}
-          onChange={(v) => setRoleV(v as any)}
-          searchable={false}
-          options={allRoles.map((r) => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
-        />
-        <button
-          onClick={async () => {
-            const trimmedEmail = email.trim();
-            if (!trimmedEmail) {
-              toast.error("Email is required");
-              return;
-            }
-            if (pw.length < 6) {
-              toast.error("Password must be at least 6 characters");
-              return;
-            }
-            try {
-              await adminCreateUser({ email: trimmedEmail, password: pw, role });
-              toast.success("User created");
-              setEmail("");
-              setPw("");
-              await refetch();
-            } catch (e: unknown) {
-              toast.error(formatActionError(e));
-            }
-          }}
-          className="rounded-xl bg-aqua text-sm font-semibold text-primary-foreground shadow-glow-aqua"
-        >
-          Create user
-        </button>
-      </div>
-      {isLoading && <p className="py-6 text-center text-sm text-muted-foreground">Loading users…</p>}
-      {!isLoading && !isError && (data?.users ?? []).length === 0 && (
-        <p className="py-6 text-center text-sm text-muted-foreground">
-          No users yet. Add SUPABASE_SERVICE_ROLE_KEY to .env to create users, then restart the dev server.
-        </p>
-      )}
-      <div className="space-y-2">
-        {(data?.users ?? []).map((u: any) => (
-          <div key={u.id} className="rounded-2xl glass p-4">
-            <div className="flex items-center justify-between">
-              <div className="font-medium">{u.email}</div>
-              <button onClick={async () => { if (confirm("Delete user?")) { await adminDeleteUser({ user_id: u.id }); qc.invalidateQueries({ queryKey: ["a-users"] }); } }}
-                className="rounded-lg bg-destructive/15 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/25">
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {allRoles.map((r) => {
-                const has = u.roles.includes(r);
-                return (
-                  <button key={r}
-                    onClick={async () => { await adminSetRole({ user_id: u.id, role: r, enabled: !has }); qc.invalidateQueries({ queryKey: ["a-users"] }); }}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                      has ? "bg-aqua/20 text-aqua ring-1 ring-aqua/40" : "bg-foreground/5 text-muted-foreground hover:bg-foreground/10"
-                    }`}>
-                    {has && "✓ "}{r}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </Panel>
-  );
-}
-
-function SettingsTab() {
-  const { data, refetch } = useQuery({ queryKey: ["a-settings"], queryFn: () => adminGetSettings() });
-  const [key, setKey] = useState("");
-  const [enabled, setEnabled] = useState(false);
-  const [synced, setSynced] = useState(false);
   useEffect(() => {
-    if (data?.settings && !synced) {
-      setKey(data.settings.scandit_api_key ?? "");
-      setEnabled(!!data.settings.scandit_enabled);
-      setSynced(true);
-    }
-  }, [data, synced]);
+    if (tab !== "overview" || searchParams.get("scroll") !== "schedule") return;
+    const t = window.setTimeout(scrollToAdminSchedule, 80);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("scroll");
+    const qs = params.toString();
+    router.replace(qs ? `/admin?${qs}` : "/admin", { scroll: false });
+    return () => window.clearTimeout(t);
+  }, [tab, searchParams, router]);
+
+  const onTabChange = useCallback(
+    (key: AdminTabKey) => {
+      setTab(key);
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("scroll");
+      if (key === "overview") params.delete("tab");
+      else params.set("tab", key);
+      const qs = params.toString();
+      router.replace(qs ? `/admin?${qs}` : "/admin", { scroll: false });
+    },
+    [router, searchParams],
+  );
+
   return (
-    <Panel title="Scanner Settings">
-      <div className="max-w-xl space-y-5">
-        <div>
-          <Label className="mb-1.5 block text-xs uppercase tracking-wider text-muted-foreground">Scandit API Key</Label>
-          <Input type="password" value={key} onChange={(e) => setKey(e.target.value)}
-            placeholder={data?.settings?.scandit_api_key ? "•••• stored ••••" : "Paste API key"}
-            className="h-11 border-0 bg-foreground/5" />
-        </div>
-        <div className="flex items-center justify-between rounded-2xl glass p-4">
-          <div>
-            <div className="font-medium">Enable Scandit scanning</div>
-            <div className="text-xs text-muted-foreground">When off, scanner falls back to browser camera.</div>
-          </div>
-          <Switch checked={enabled} onCheckedChange={setEnabled} />
-        </div>
-        <button onClick={async () => { await adminSaveSettings({ scandit_api_key: key || null, scandit_enabled: enabled }); toast.success("Saved"); refetch(); }}
-          className="inline-flex items-center gap-2 rounded-xl bg-sunset px-5 py-2.5 text-sm font-semibold text-foreground shadow-glow-sunset">
-          Save settings
-        </button>
-      </div>
-    </Panel>
+    <AdminNavigationProvider onTabChange={onTabChange}>
+      <AdminShell tab={tab} onTabChange={onTabChange}>
+        {tab === "overview" && <AdminOverviewSection />}
+        {tab === "events" && <AdminEventsSection />}
+        {tab === "slots" && <AdminSlotsSection />}
+        {tab === "registrations" && <AdminBookingsSection />}
+        {tab === "reports" && <AdminReportsTab />}
+        {tab === "users" && <AdminGuestsSection />}
+        {tab === "settings" && <AdminSettingsTab />}
+      </AdminShell>
+    </AdminNavigationProvider>
   );
 }

@@ -2,30 +2,39 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useAuth, type AppRole } from "@/hooks/use-auth";
+import { userHasRoleAccess } from "@/lib/staff-auth";
 import { Button } from "@/components/ui/button";
-import { LogOut, Waves } from "lucide-react";
+import { LogOut } from "lucide-react";
+import { SummerSplashLogo } from "@/components/brand/summer-splash-logo";
+import { UNIFIED_LOGIN_PATH } from "@/lib/staff-auth";
 
-export function RoleGuard({ role, loginPath, children, nav, bare }: {
+export function RoleGuard({
+  role,
+  loginPath = UNIFIED_LOGIN_PATH,
+  children,
+  nav,
+  bare,
+}: {
   role: AppRole;
-  loginPath: string;
-  children: React.ReactNode;
+  loginPath?: string;  children: React.ReactNode;
   nav?: React.ReactNode;
   /** When true, render children without the default header chrome — the route brings its own. */
   bare?: boolean;
 }) {
-  const { loading, session, hasRole, signOut } = useAuth();
+  const { loading, rolesLoaded, session, roles, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const allowed = useMemo(() => userHasRoleAccess(roles, role), [roles, role]);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || !rolesLoaded) return;
     if (!session) router.push(loginPath);
-    else if (!hasRole(role)) router.push(loginPath);
-  }, [loading, session, hasRole, role, loginPath, router, pathname]);
+    else if (!allowed) router.push(loginPath);
+  }, [loading, rolesLoaded, session, allowed, role, loginPath, router, pathname]);
 
-  if (loading || !session || !hasRole(role)) {
+  if (loading || !rolesLoaded || !session || !allowed) {
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Checking access…</div>;
   }
 
@@ -35,10 +44,7 @@ export function RoleGuard({ role, loginPath, children, nav, bare }: {
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
-          <Link href="/" className="flex items-center gap-2">
-            <Waves className="h-5 w-5 text-primary" />
-            <span className="font-display font-bold">SummerSplash</span>
-          </Link>
+          <SummerSplashLogo href="/" size="sm" />
           <div className="flex items-center gap-2">
             {nav}
             <Button variant="ghost" size="sm" onClick={async () => { await signOut(); router.push(loginPath); }}>

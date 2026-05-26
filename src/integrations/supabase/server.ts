@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import type { Database } from "./types";
 
 export async function createSupabaseServerClient() {
@@ -14,6 +15,7 @@ export async function createSupabaseServerClient() {
   }
 
   return createServerClient<Database>(url, key, {
+    global: { fetch: fetchWithTimeout() },
     cookies: {
       getAll() {
         return cookieStore.getAll();

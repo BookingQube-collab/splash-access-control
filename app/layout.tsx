@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Sora } from "next/font/google";
+import { Inter, Pacifico, Sora } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -14,19 +14,41 @@ const sora = Sora({
   variable: "--font-display",
 });
 
+const pacifico = Pacifico({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-script",
+});
+
 export const metadata: Metadata = {
-  title: "E3 Summer Splash — Access Control",
-  description: "E3 Summer Splash event registration, QR passes, and staff access control.",
+  title: "SummerSplash — Beach Festival Access",
+  description: "SummerSplash event registration, QR passes, and staff access control.",
+  applicationName: "SummerSplash",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "SummerSplash",
+    statusBarStyle: "default",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${sora.variable}`}
+      className={`${inter.variable} ${sora.variable} ${pacifico.variable}`}
       suppressHydrationWarning
     >
-      <body className="min-h-screen antialiased" suppressHydrationWarning>
+      <body className="relative min-h-screen antialiased" suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>

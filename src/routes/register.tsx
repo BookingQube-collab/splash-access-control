@@ -1,282 +1,201 @@
-"use client";
+﻿"use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { format } from "date-fns";
-import { motion, AnimatePresence } from "framer-motion";
-import { getPublicEvent, publicRegister } from "@/lib/summersplash.functions";
-import { Label } from "@/components/ui/label";
-import { Waves, ArrowLeft, Users, Mail, Phone, User, ChevronRight, Check, X } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { getPublicEvent } from "@/lib/summersplash.functions";
+import { MY_PASSES_QUERY_KEY } from "@/hooks/use-my-passes";
+import { usePublicPassReady } from "@/hooks/use-public-pass-ready";
 import { toast } from "sonner";
-import { BeachBg } from "@/components/beach-bg";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
-import { IntlPhoneInput } from "@/components/phone-input";
+import { isSlotPastForDate } from "@/lib/slot-time";
+import {
+  allowedBookingDates,
+  clampBookingDate,
+  eventDateRange,
+  todayYmd,
+} from "@/lib/utils";
+import { RegisterBeachLayout } from "@/components/public/register-beach-layout";
+import { RegisterHero } from "@/components/public/register-hero";
+import { RegisterBookingCard } from "@/components/public/register-booking-card";
+import {
+  PublicRegisterDialog,
+  type PublicRegisterSuccess,
+} from "@/components/public/public-register-dialog";
+
+type PublicEventData = Awaited<ReturnType<typeof getPublicEvent>>;
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { data, isLoading, refetch } = useQuery({ queryKey: ["public-event"], queryFn: () => getPublicEvent(), refetchInterval: 5000, refetchOnWindowFocus: true });
+  const queryClient = useQueryClient();
+  const { onRegisterSuccess: showPassReady, PassReadyModal } = usePublicPassReady();
+  const searchParams = useSearchParams();
+  const dateParam = searchParams.get("date");
+  const slotParam = searchParams.get("slot") ?? "";
 
-  const [slotId, setSlotId] = useState("");
-  const [name, setName] = useState("");
-  const [mobile, setMobile] = useState("");
-  const [email, setEmail] = useState("");
-  const [guests, setGuests] = useState(1);
-  const [submitting, setSubmitting] = useState(false);
+  const [bookingDate, setBookingDate] = useState<string | undefined>(
+    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : undefined,
+  );
+  const [slotId, setSlotId] = useState(slotParam);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const userPickedDateRef = useRef(false);
+  const lastEventIdRef = useRef<string | null>(null);
+  const [fullyBookedCache, setFullyBookedCache] = useState<Set<string>>(new Set());
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!slotId) { toast.error("Pick a slot first"); return; }
-    setSubmitting(true);
-    try {
-      const res = await publicRegister({ slot_id: slotId, customer_name: name.trim(), mobile: mobile.trim(), email: email.trim(), guest_count: guests });
-      router.push(`/pass/${res.qr_token}`);
-    } catch (err: any) {
-      toast.error(err.message || "Registration failed");
-      refetch();
-    } finally {
-      setSubmitting(false);
+  const { data, isLoading, refetch } = useQuery<PublicEventData>({
+    queryKey: ["public-event", bookingDate ?? "auto"],
+    queryFn: () => getPublicEvent(bookingDate ? { date: bookingDate } : {}),
+    placeholderData: keepPreviousData,
+    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
+  });
+
+  const defaultBookingDate = useMemo(() => {
+    if (!data?.event) return undefined;
+    const { start, end } = eventDateRange(data.event);
+    return clampBookingDate(todayYmd(), start, end);
+  }, [data?.event]);
+
+  const activeDate = bookingDate ?? data?.bookingDate ?? defaultBookingDate;
+
+  useEffect(() => {
+    if (!data?.event || !defaultBookingDate) return;
+    const eventId = data.event.id;
+    const eventChanged =
+      lastEventIdRef.current !== null && lastEventIdRef.current !== eventId;
+    lastEventIdRef.current = eventId;
+
+    const { start, end } = eventDateRange(data.event);
+    const { allowedStart, allowedEnd } = allowedBookingDates(start, end);
+
+    const clampParam = (d: string) => {
+      if (d < allowedStart) return allowedStart;
+      if (d > allowedEnd) return allowedEnd;
+      return d;
+    };
+
+    if (eventChanged) {
+      userPickedDateRef.current = false;
+      setBookingDate(defaultBookingDate);
+      setSlotId("");
+      setDetailsOpen(false);
+      return;
     }
+
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) && !userPickedDateRef.current) {
+      const clamped = clampParam(dateParam);
+      if (bookingDate !== clamped) setBookingDate(clamped);
+      return;
+    }
+
+    if (!userPickedDateRef.current && bookingDate === undefined) {
+      setBookingDate(defaultBookingDate);
+    }
+  }, [data?.event, defaultBookingDate, bookingDate, dateParam]);
+
+  useEffect(() => {
+    if (slotParam) setSlotId(slotParam);
+  }, [slotParam]);
+
+  useEffect(() => {
+    if (!activeDate || !data?.slots?.length) return;
+    const allFull = data.slots.every((s) => s.remaining <= 0);
+    setFullyBookedCache((prev) => {
+      const next = new Set(prev);
+      if (allFull) next.add(activeDate);
+      else next.delete(activeDate);
+      return next;
+    });
+  }, [activeDate, data?.slots]);
+
+  const syncUrl = useCallback(
+    (date: string, slot?: string) => {
+      const params = new URLSearchParams();
+      params.set("date", date);
+      if (slot) params.set("slot", slot);
+      router.replace(`/register?${params.toString()}`, { scroll: false });
+    },
+    [router],
+  );
+
+  const onSelectDate = (d: string) => {
+    userPickedDateRef.current = true;
+    setBookingDate(d);
+    setSlotId("");
+    setDetailsOpen(false);
+    syncUrl(d);
+  };
+
+  const onSelectSlot = (id: string) => {
+    setSlotId(id);
+    if (activeDate) syncUrl(activeDate, id);
+  };
+
+  const onRegisterSuccess = (result: PublicRegisterSuccess) => {
+    setSlotId("");
+    setDetailsOpen(false);
+    void queryClient.invalidateQueries({ queryKey: [MY_PASSES_QUERY_KEY] });
+    showPassReady(result);
+  };
+
+  const slots = data?.slots ?? [];
+  const fullyBookedDates = useMemo(() => Array.from(fullyBookedCache), [fullyBookedCache]);
+
+  const openDetails = () => {
+    if (!slotId) {
+      toast.error("Pick a slot first");
+      return;
+    }
+    const picked = slots.find((s) => s.id === slotId);
+    if (activeDate && picked && isSlotPastForDate(picked, activeDate)) {
+      toast.error("This slot has ended. Choose another slot or date.");
+      return;
+    }
+    setDetailsOpen(true);
   };
 
   return (
-    <div className="relative min-h-screen">
-      <BeachBg variant="ocean" />
-
-      <header className="relative z-10 mx-auto flex max-w-3xl items-center justify-between px-6 py-6">
-        <Link href="/" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" /> Back
-        </Link>
-        <Link href="/" className="flex items-center gap-2">
-          <Waves className="h-5 w-5 text-primary" />
-          <span className="font-display text-base font-bold">SummerSplash</span>
-        </Link>
-      </header>
-
-      <main className="relative z-10 mx-auto max-w-3xl px-6 pb-20">
-        {isLoading ? (
-          <div className="grid place-items-center py-24">
-            <div className="h-12 w-12 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+    <RegisterBeachLayout>
+      {isLoading && !data ? (
+        <div className="grid place-items-center py-32">
+          <motion.div className="h-12 w-12 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+        </div>
+      ) : !data?.event ? (
+        <main className="mx-auto max-w-lg px-4 py-16 sm:px-6">
+          <div className="rounded-3xl border border-white/70 bg-white/95 p-10 text-center shadow-soft">
+            <p className="text-muted-foreground">No active event right now. Check back soon.</p>
           </div>
-        ) : !data?.event ? (
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-            className="rounded-3xl glass p-10 text-center">
-            <p className="text-muted-foreground">No active event right now. Check back soon. 🌊</p>
-          </motion.div>
-        ) : (
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-            {/* Event hero */}
-            <div className="overflow-hidden rounded-3xl glass-strong p-8 shadow-soft">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-aqua">
-                {format(new Date(data.event.event_date), "EEEE · MMMM d, yyyy")}
-              </p>
-              <h1 className="mt-2 font-display text-4xl font-extrabold tracking-tight">
-                {data.event.name}
-              </h1>
-              <p className="mt-2 text-sm text-muted-foreground">Pick a slot, fill in details, get your glowing pass.</p>
-            </div>
+        </main>
+      ) : (
+        <>
+          <RegisterHero activeDate={activeDate} />
+          {activeDate && (
+            <RegisterBookingCard
+              eventStart={data.event.start_date}
+              eventEnd={data.event.end_date}
+              activeDate={activeDate}
+              onSelectDate={onSelectDate}
+              fullyBookedDates={fullyBookedDates}
+              slots={slots}
+              slotId={slotId}
+              onSelectSlot={onSelectSlot}
+              onRegisterClick={openDetails}
+            />
+          )}
+        </>
+      )}
 
-            {/* Slots */}
-            <section className="mt-8">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="font-display text-lg font-semibold">Pick a slot</h2>
-                <span className="text-xs text-muted-foreground">{data.slots.length} available</span>
-              </div>
-              {data.slots.length === 0 ? (
-                <div className="rounded-2xl glass p-6 text-sm text-muted-foreground">No slots configured yet.</div>
-              ) : data.slots.every((s) => s.remaining <= 0) ? (
-                <div className="rounded-2xl border border-coral/30 bg-coral/10 p-6 text-center">
-                  <p className="font-display text-lg font-bold text-coral">All slots are full</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Registration is closed for now. Please check back later. 🌊</p>
-                </div>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {data.slots.map((s, i) => {
-                    const full = s.remaining <= 0;
-                    const selected = slotId === s.id;
-                    const pct = Math.min(100, Math.round(((s.capacity - s.remaining) / Math.max(1, s.capacity)) * 100));
-                    return (
-                      <motion.button
-                        key={s.id}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.05 }}
-                        whileHover={!full ? { y: -3 } : {}}
-                        type="button"
-                        disabled={full}
-                        onClick={() => setSlotId(s.id)}
-                        className={`group relative overflow-hidden rounded-2xl p-5 text-left transition-all ${
-                          selected
-                            ? "glass-strong shadow-glow-aqua ring-1 ring-primary"
-                            : "glass hover:shadow-glow-aqua"
-                        } ${full ? "cursor-not-allowed opacity-50" : ""}`}
-                      >
-                        {selected && (
-                          <span className="absolute right-3 top-3 grid h-6 w-6 place-items-center rounded-full bg-primary text-primary-foreground">
-                            <Check className="h-3.5 w-3.5" />
-                          </span>
-                        )}
-                        <div className="font-display text-lg font-bold">{s.name}</div>
-                        <div className="mt-0.5 text-xs text-muted-foreground">
-                          {format(new Date(s.starts_at), "EEE MMM d · p")} – {format(new Date(s.ends_at), "p")}
-                        </div>
-                        <div className="mt-4">
-                          <div className="flex items-center justify-between text-xs">
-                            {full ? (
-                              <span className="font-bold uppercase tracking-wider text-coral">Sold out</span>
-                            ) : (
-                              <>
-                                <span className="text-muted-foreground">Capacity</span>
-                                <span className="font-semibold"><b>{s.remaining}</b> / {s.capacity} left</span>
-                              </>
-                            )}
-                          </div>
-                          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-foreground/10">
-                            <motion.div
-                              initial={{ width: 0 }}
-                              animate={{ width: `${pct}%` }}
-                              transition={{ duration: 0.8, delay: 0.2 + i * 0.05 }}
-                              className={`h-full rounded-full ${full ? "bg-coral" : "bg-gradient-to-r from-aqua to-primary"}`}
-                            />
-                          </div>
-                        </div>
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-          </motion.div>
-        )}
-      </main>
-
-      {/* Glassmorphism modal with floating labels */}
-      <Dialog open={!!slotId} onOpenChange={(v) => { if (!v) setSlotId(""); }}>
-        <DialogContent hideClose className="max-w-md border-0 bg-transparent p-0 shadow-none">
-          <motion.form
-            onSubmit={onSubmit}
-            initial={{ scale: 0.95, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            transition={{ type: "spring", stiffness: 280, damping: 26 }}
-            className="relative overflow-hidden rounded-3xl glass-strong p-7 shadow-soft"
-          >
-            <button type="button" onClick={() => setSlotId("")}
-              className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full bg-foreground/10 text-foreground/70 hover:bg-foreground/20">
-              <X className="h-4 w-4" />
-            </button>
-
-            {(() => {
-              const slot = data?.slots.find((s) => s.id === slotId);
-              const pct = slot ? Math.min(100, Math.round(((slot.capacity - slot.remaining) / Math.max(1, slot.capacity)) * 100)) : 0;
-              return slot ? (
-                <div className="mb-5">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-aqua">Reserving</p>
-                  <h2 className="mt-1 font-display text-2xl font-bold leading-tight">{slot.name}</h2>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {format(new Date(slot.starts_at), "EEE MMM d · p")} – {format(new Date(slot.ends_at), "p")}
-                  </p>
-                  <div className="mt-3">
-                    <div className="flex justify-between text-[11px] text-muted-foreground">
-                      <span>Capacity</span>
-                      <span><b className="text-foreground">{slot.remaining}</b> / {slot.capacity} left</span>
-                    </div>
-                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-foreground/10">
-                      <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.7 }}
-                        className="h-full bg-gradient-to-r from-aqua to-primary" />
-                    </div>
-                  </div>
-                </div>
-              ) : null;
-            })()}
-
-            <div className="space-y-3.5">
-              <FloatField id="rname" label="Full name" value={name} onChange={setName} icon={<User className="h-4 w-4" />} required maxLength={120} />
-              <div className="grid grid-cols-[1fr_110px] gap-3">
-                <div>
-                  <Label className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                    <Phone className="h-3.5 w-3.5" /> Mobile
-                  </Label>
-                  <IntlPhoneInput value={mobile} onChange={setMobile} placeholder="Mobile" />
-                </div>
-                <FloatField id="rguests" label="Guests" type="number" value={String(guests)} onChange={(v) => setGuests(Math.max(1, Math.min(20, Number(v) || 1)))} icon={<Users className="h-4 w-4" />} />
-              </div>
-              <FloatField id="remail" label="Email (optional)" type="email" value={email} onChange={setEmail} icon={<Mail className="h-4 w-4" />} maxLength={255} />
-            </div>
-
-            {(() => {
-              const slot = data?.slots.find((s) => s.id === slotId);
-              if (!slot) return null;
-              const full = slot.remaining <= 0;
-              const over = !full && guests > slot.remaining;
-              if (!full && !over) return null;
-              return (
-                <div className="mt-4 rounded-xl border border-coral/30 bg-coral/10 px-4 py-3 text-xs text-coral">
-                  {full
-                    ? "This slot is full — please pick another slot."
-                    : `Only ${slot.remaining} ${slot.remaining === 1 ? "spot" : "spots"} left in this slot. Reduce guest count to continue.`}
-                </div>
-              );
-            })()}
-
-            {(() => {
-              const slot = data?.slots.find((s) => s.id === slotId);
-              const blocked = !slot || slot.remaining <= 0 || guests > slot.remaining;
-              return (
-                <button
-                  type="submit"
-                  disabled={submitting || blocked}
-                  className="mt-6 group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-sunset py-4 font-semibold text-foreground shadow-glow-sunset disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <span className="relative z-10">
-                    {submitting ? "Reserving your spot…" : blocked && slot ? (slot.remaining <= 0 ? "Slot full" : "Not enough capacity") : "Get my QR pass"}
-                  </span>
-                  <ChevronRight className="relative z-10 h-5 w-5 transition-transform group-hover:translate-x-1" />
-                  <span className="absolute inset-0 animate-shimmer opacity-60" />
-                </button>
-              );
-            })()}
-          </motion.form>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-function FloatField({
-  id, label, value, onChange, icon, type = "text", required, maxLength,
-}: {
-  id: string; label: string; value: string; onChange: (v: string) => void;
-  icon: React.ReactNode; type?: string; required?: boolean; maxLength?: number;
-}) {
-  const filled = value.length > 0;
-  return (
-    <div className="relative">
-      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground">{icon}</span>
-      <input
-        id={id}
-        type={type}
-        value={value}
-        required={required}
-        maxLength={maxLength}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder=" "
-        className={cn(
-          "peer h-14 w-full rounded-xl border border-foreground/10 bg-foreground/5 pl-11 pr-3 pt-4 text-base outline-none backdrop-blur transition",
-          "focus:border-primary/60 focus:bg-foreground/10 focus:ring-2 focus:ring-primary/20",
-        )}
+      <PublicRegisterDialog
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        slot={data?.slots.find((s) => s.id === slotId)}
+        slotIndex={slots.findIndex((s) => s.id === slotId)}
+        activeDate={activeDate}
+        eventName={data?.event?.name}
+        onSuccess={onRegisterSuccess}
+        onRefetch={() => void refetch()}
       />
-      <Label
-        htmlFor={id}
-        className={cn(
-          "pointer-events-none absolute left-11 top-1/2 -translate-y-1/2 text-sm text-muted-foreground transition-all",
-          (filled || true) && "peer-focus:top-3 peer-focus:translate-y-0 peer-focus:text-[10px] peer-focus:uppercase peer-focus:tracking-wider peer-focus:text-aqua",
-          filled && "top-3 translate-y-0 text-[10px] uppercase tracking-wider text-aqua",
-        )}
-      >
-        {label}
-      </Label>
-    </div>
+      {PassReadyModal}
+    </RegisterBeachLayout>
   );
 }

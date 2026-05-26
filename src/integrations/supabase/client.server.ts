@@ -1,13 +1,17 @@
 // Server-side Supabase client with service role key — bypasses RLS.
 // Use this for admin operations in server functions and server routes only.
 // For user-authenticated queries (with RLS), use the auth middleware instead.
+import "server-only";
+
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
+import { getSupabaseServiceRoleConfigError } from '@/lib/supabase-service-role';
 
 export function getSupabaseAdminClientOrNull() {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
-  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  if (getSupabaseServiceRoleConfigError()) return null;
   return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: {
       storage: undefined,

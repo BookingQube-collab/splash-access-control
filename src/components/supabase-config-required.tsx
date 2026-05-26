@@ -10,8 +10,9 @@ export function SupabaseConfigRequired() {
       <div className="max-w-lg rounded-2xl border border-border bg-card p-8 text-card-foreground shadow-lg">
         <h1 className="font-display text-xl font-bold">Supabase not configured</h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          Add these environment variables in Vercel → Project → Settings → Environment Variables,
-          then <strong>redeploy</strong> (required for <code className="text-xs">NEXT_PUBLIC_*</code> vars).
+          For local development, open <strong>Admin → Settings</strong> and save your Supabase URL and keys
+          (writes <code className="text-xs">.env.local</code>, then restart <code className="text-xs">npm run dev</code>).
+          On Vercel, add variables under Project → Settings → Environment Variables and redeploy.
         </p>
         <ul className="mt-4 space-y-2 font-mono text-xs text-muted-foreground">
           <li>NEXT_PUBLIC_SUPABASE_URL</li>

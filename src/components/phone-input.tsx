@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 type Props = {
   value: string;
   onChange: (val: string) => void;
+  onBlur?: () => void;
   placeholder?: string;
   className?: string;
   defaultCountry?: string;
@@ -15,7 +16,7 @@ type Props = {
 };
 
 export function IntlPhoneInput({
-  value, onChange, placeholder = "Mobile number", className,
+  value, onChange, onBlur, placeholder = "Mobile number", className,
   defaultCountry = "qa", required, autoFocus, id, variant = "soft",
 }: Props) {
   const shell =
@@ -29,7 +30,7 @@ export function IntlPhoneInput({
         value={value}
         onChange={(v) => onChange(v ?? "")}
         placeholder={placeholder}
-        inputProps={{ id, required, autoFocus }}
+        inputProps={{ id, required, autoFocus, onBlur }}
       />
     </div>
   );

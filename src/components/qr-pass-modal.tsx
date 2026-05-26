@@ -1,10 +1,11 @@
 "use client";
 
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { QRCodeSVG } from "qrcode.react";
 import { motion } from "framer-motion";
 import { Sparkles, Printer, ExternalLink, X, Share2 } from "lucide-react";
 import Link from "next/link";
+import { passUrl } from "@/lib/public-url";
 import { toast } from "sonner";
 
 export function QrPassModal({
@@ -23,20 +24,21 @@ export function QrPassModal({
   guests?: number;
 }) {
   if (!token) return null;
-  const passUrl = typeof window !== "undefined" ? `${window.location.origin}/pass/${token}` : `/pass/${token}`;
+  const fullPassUrl = passUrl(token);
+  const passPath = `/pass/${token}`;
 
   const handleShare = async () => {
     const shareData = {
       title: "SummerSplash digital pass",
       text: customerName ? `${customerName}'s pass${slotName ? " · " + slotName : ""}` : "Your SummerSplash pass",
-      url: passUrl,
+      url: fullPassUrl,
     };
     try {
       if (typeof navigator !== "undefined" && (navigator as any).share) {
         await (navigator as any).share(shareData);
         return;
       }
-      await navigator.clipboard.writeText(passUrl);
+      await navigator.clipboard.writeText(fullPassUrl);
       toast.success("Pass link copied to clipboard");
     } catch {
       // user dismissed share — silent
@@ -46,6 +48,9 @@ export function QrPassModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent hideClose className="max-w-sm border-0 bg-transparent p-0 shadow-none">
+        <DialogTitle className="sr-only">
+          {customerName ? `${customerName}'s digital pass` : "Digital pass ready"}
+        </DialogTitle>
         <motion.div
           initial={{ scale: 0.92, opacity: 0, y: 12 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -72,17 +77,21 @@ export function QrPassModal({
           )}
 
           <Link
-            href={`/pass/${token}`}
+            href={passPath}
             target="_blank"
             className="relative mt-5 grid place-items-center rounded-2xl bg-white p-5 transition hover:scale-[1.01]"
           >
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-aqua/10 via-transparent to-sunset/10" />
-            <QRCodeSVG value={token} size={220} level="H" includeMargin={false} />
+            <QRCodeSVG value={fullPassUrl} size={220} level="H" includeMargin={false} />
           </Link>
+
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            Scan on your phone to open your pass — save to home screen for quick entry.
+          </p>
 
           {/* Primary: open the full digital pass page (reprint + share source) */}
           <Link
-            href={`/pass/${token}`}
+            href={passPath}
             target="_blank"
             className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-sunset py-3 text-sm font-semibold text-foreground shadow-glow-sunset transition hover:brightness-110"
           >
@@ -92,7 +101,7 @@ export function QrPassModal({
           {/* Reprint + Share */}
           <div className="mt-2 grid grid-cols-2 gap-2">
             <button
-              onClick={() => window.open(passUrl, "_blank", "noopener,noreferrer")}
+              onClick={() => window.open(fullPassUrl, "_blank", "noopener,noreferrer")}
               className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-foreground/10 px-3 py-2.5 text-xs font-semibold hover:bg-foreground/15"
               title="Open the full pass and print"
             >

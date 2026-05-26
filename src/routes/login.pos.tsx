@@ -1,7 +1,6 @@
-import { RoleLogin } from "@/components/role-login";
+import { redirect } from "next/navigation";
+import { UNIFIED_LOGIN_PATH } from "@/lib/staff-auth";
 
 export default function PosLoginPage() {
-  return (
-    <RoleLogin role="pos" title="POS Login" subtitle="Counter staff registration." redirectTo="/pos" />
-  );
+  redirect(UNIFIED_LOGIN_PATH);
 }

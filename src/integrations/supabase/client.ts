@@ -9,7 +9,12 @@ export function createSupabaseBrowserClient() {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   }
 
-  return createBrowserClient<Database>(url, key);
+  return createBrowserClient<Database>(url, key, {
+    auth: {
+      // Requires GoTrue PASSKEY_ENABLED on the project (Authentication → Passkeys in dashboard).
+      experimental: { passkey: true },
+    },
+  });
 }
 
 let _supabase: ReturnType<typeof createSupabaseBrowserClient> | undefined;

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { isSupabaseConfigured, SupabaseConfigRequired } from "@/components/supabase-config-required";
+import { ThemeClassSync } from "@/components/theme-class-sync";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
@@ -29,6 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeClassSync />
       {children}
       <Toaster richColors position="top-right" />
     </QueryClientProvider>

@@ -1,7 +1,6 @@
-import { RoleLogin } from "@/components/role-login";
+import { redirect } from "next/navigation";
+import { UNIFIED_LOGIN_PATH } from "@/lib/staff-auth";
 
 export default function DashboardLoginPage() {
-  return (
-    <RoleLogin role="dashboard" title="Dashboard Login" subtitle="Live operations dashboard." redirectTo="/dashboard" />
-  );
+  redirect(UNIFIED_LOGIN_PATH);
 }

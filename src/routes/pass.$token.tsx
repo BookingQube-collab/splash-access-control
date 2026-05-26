@@ -5,11 +5,16 @@ import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
 import { format } from "date-fns";
+import { formatSlotDisplayLabel, formatSlotTimeRange } from "@/lib/slot-time";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect } from "react";
 import { getPass } from "@/lib/summersplash.functions";
+import { passInactiveReason } from "@/lib/pass-active";
+import { myPassesUrl, passUrl } from "@/lib/public-url";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { Waves, CheckCircle2, XCircle, LogIn, LogOut, Sun, Users, Hash } from "lucide-react";
+import { CheckCircle2, XCircle, LogIn, LogOut, Sun, Users, Hash } from "lucide-react";
+import { SummerSplashLogo } from "@/components/brand/summer-splash-logo";
 import { BeachBg } from "@/components/beach-bg";
 
 export default function PassPage() {
@@ -84,16 +89,20 @@ export default function PassPage() {
     Exited:  { dot: "bg-muted-foreground", text: "text-muted-foreground", label: "Exited", icon: <LogOut className="h-3.5 w-3.5" /> },
     Expired: { dot: "bg-destructive", text: "text-destructive", label: "Expired", icon: <XCircle className="h-3.5 w-3.5" /> },
   };
-  const cfg = statusConfig[data.liveStatus] ?? statusConfig.Active;
+  const active = data.isActive ?? (data.liveStatus === "Active" || data.liveStatus === "Inside");
+  const inactiveMessage = (!active ? passInactiveReason(data) : null) ?? "This pass is no longer valid";
+  const cfg =
+    !active && data.liveStatus !== "Inside"
+      ? statusConfig.Expired
+      : statusConfig[data.liveStatus] ?? statusConfig.Active;
 
   return (
     <div className="relative min-h-screen px-4 py-8">
       <BeachBg variant="sunset" />
 
-      <Link href="/" className="relative z-10 mx-auto mb-6 flex max-w-md items-center justify-center gap-2">
-        <Waves className="h-5 w-5 text-primary" />
-        <span className="font-display text-base font-bold">SummerSplash</span>
-      </Link>
+      <div className="relative z-10 mx-auto mb-6 flex max-w-md justify-center">
+        <SummerSplashLogo href="/" size="sm" />
+      </div>
 
       <div className="relative z-10 mx-auto max-w-md">
         <AnimatePresence>
@@ -123,7 +132,8 @@ export default function PassPage() {
                     <div className="text-[11px] opacity-80">Guest</div>
                     <h1 className="font-display text-3xl font-extrabold leading-tight">{data.customer_name}</h1>
                     <div className="mt-1 text-xs opacity-90">
-                      {format(new Date(data.event_date), "EEE · MMM d, yyyy")} · {data.slot_name}
+                      {format(new Date(data.event_date), "EEE · MMM d, yyyy")} ·{" "}
+                      {formatSlotDisplayLabel(data.slot_name, data.slot_starts_at, data.slot_ends_at)}
                     </div>
                   </div>
                 </div>
@@ -154,26 +164,51 @@ export default function PassPage() {
 
                 {/* QR with glow */}
                 <div className="relative mx-auto w-fit">
-                  <div className="absolute -inset-3 -z-10 rounded-2xl bg-aqua/40 blur-2xl" />
+                  {active ? (
+                    <div className="absolute -inset-3 -z-10 rounded-2xl bg-aqua/40 blur-2xl" />
+                  ) : null}
                   <motion.div
-                    animate={{ y: [0, -3, 0] }}
+                    animate={active ? { y: [0, -3, 0] } : undefined}
                     transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                    className="rounded-2xl bg-white p-5 shadow-glow-aqua"
+                    className={cn(
+                      "relative rounded-2xl bg-white p-5",
+                      active ? "shadow-glow-aqua" : "opacity-30 shadow-none",
+                    )}
                   >
-                    <QRCodeSVG value={data.qr_token} size={220} level="H" />
+                    <QRCodeSVG value={passUrl(data.qr_token)} size={220} level="H" />
+                    {!active ? (
+                      <motion.div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-2xl bg-white/80">
+                        <span className="rounded-full bg-destructive px-4 py-1.5 text-sm font-bold uppercase tracking-wide text-destructive-foreground">
+                          Expired
+                        </span>
+                      </motion.div>
+                    ) : null}
                   </motion.div>
                 </div>
 
                 <dl className="mt-7 grid grid-cols-2 gap-4 text-sm">
                   <Detail icon={<Hash className="h-3.5 w-3.5" />} label="Pass ID" value={data.id.slice(0, 8).toUpperCase()} mono />
                   <Detail icon={<Users className="h-3.5 w-3.5" />} label="Guests" value={String(data.guest_count)} />
-                  <Detail label="Starts" value={format(new Date(data.slot_starts_at), "p")} />
-                  <Detail label="Ends"   value={format(new Date(data.slot_ends_at), "p")} />
+                  <Detail
+                    label="Slot time"
+                    value={formatSlotTimeRange(data.slot_starts_at, data.slot_ends_at)}
+                  />
                 </dl>
 
-                <p className="mt-6 text-center text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                  Show this QR at the entry
+                <p
+                  className={cn(
+                    "mt-6 text-center text-[11px] uppercase tracking-[0.2em]",
+                    active ? "text-muted-foreground" : "font-semibold normal-case text-destructive",
+                  )}
+                >
+                  {active ? "Show this QR at the entry" : inactiveMessage}
                 </p>
+                <Link
+                  href={myPassesUrl(data.qr_token)}
+                  className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-brand-teal/30 bg-brand-teal/10 py-2.5 text-xs font-bold text-brand-teal hover:bg-brand-teal/15"
+                >
+                  All my passes
+                </Link>
               </div>
             </div>
           </motion.div>
