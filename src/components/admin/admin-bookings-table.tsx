@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, MoreHorizontal, Pencil, RefreshCw } from "lucide-react";
+import { ExternalLink, Mail, MoreHorizontal, Pencil, RefreshCw } from "lucide-react";
 import { ADMIN_CARD } from "@/components/admin/admin-theme";
 import {
   DropdownMenu,
@@ -13,6 +13,8 @@ import { AdminBookingsPagination } from "@/components/admin/admin-bookings-pagin
 import {
   BOOKING_STATUS_STYLES,
   bookingDisplayStatus,
+  EMAIL_STATUS_STYLES,
+  emailDisplayStatus,
   formatBookingsUpdatedLabel,
   formatRegistrationWhen,
 } from "@/components/admin/admin-bookings-utils";
@@ -27,6 +29,7 @@ const HEADERS = [
   "Slot",
   "Guests",
   "Status",
+  "Email",
   "When",
   "Action",
 ] as const;
@@ -51,6 +54,27 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
+function EmailStatusPill({ row }: { row: AdminRegistrationRow }) {
+  const label = emailDisplayStatus(row.pass_email_status, row.email);
+  const title =
+    label === "Failed" && row.pass_email_error
+      ? row.pass_email_error
+      : label === "Sent" && row.pass_email_sent_at
+        ? `Sent ${new Date(row.pass_email_sent_at).toLocaleString()}`
+        : undefined;
+  return (
+    <span
+      title={title}
+      className={cn(
+        "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+        EMAIL_STATUS_STYLES[label],
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
 export function AdminBookingsTable({
   rows,
   slotsById,
@@ -64,6 +88,8 @@ export function AdminBookingsTable({
   onRefresh,
   onEdit,
   onDelete,
+  onResend,
+  resendingId,
 }: {
   rows: AdminRegistrationRow[];
   slotsById: Map<string, AdminSlotRow>;
@@ -77,6 +103,8 @@ export function AdminBookingsTable({
   onRefresh: () => void;
   onEdit: (row: AdminRegistrationRow) => void;
   onDelete: (row: AdminRegistrationRow) => void;
+  onResend: (row: AdminRegistrationRow) => void;
+  resendingId?: string | null;
 }) {
   const countLabel =
     mode === "local"
@@ -106,7 +134,7 @@ export function AdminBookingsTable({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[960px] border-collapse text-sm">
+        <table className="w-full min-w-[1060px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-[#f1f5f9]">
               {HEADERS.map((h) => (
@@ -169,6 +197,9 @@ export function AdminBookingsTable({
                     <td className="px-5 py-5">
                       <StatusPill status={r.status} />
                     </td>
+                    <td className="px-5 py-5">
+                      <EmailStatusPill row={r} />
+                    </td>
                     <td className="px-5 py-5 text-[#64748b]">
                       {formatRegistrationWhen(r.created_at, slotStartsAt)}
                     </td>
@@ -201,9 +232,16 @@ export function AdminBookingsTable({
                               <MoreHorizontal className="h-4 w-4" />
                             </button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuContent align="end" className="w-52">
                             <DropdownMenuItem onClick={() => onEdit(r)}>
                               Edit registration
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={!r.email?.trim() || resendingId === r.id}
+                              onClick={() => onResend(r)}
+                            >
+                              <Mail className="h-3.5 w-3.5 shrink-0 text-[#64748b]" />
+                              {resendingId === r.id ? "Sending…" : "Resend pass email"}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem

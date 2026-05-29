@@ -156,7 +156,9 @@ export function AdminBookingsFilters({
               ))}
             </div>
             <span className="text-xs text-[#94a3b8]">
-              {mode === "local" ? "Instant — current page data" : "Apply to query database"}
+              {mode === "local"
+                ? "Instant filter on up to 500 rows"
+                : "Paginated query — filters auto-apply"}
             </span>
           </div>
 

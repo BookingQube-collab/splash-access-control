@@ -45,21 +45,30 @@ const STAT_CARDS: StatConfig[] = [
     label: "Active",
     icon: CircleCheck,
     iconWrap: "bg-[#dcfce7] text-[#16a34a]",
-    sub: (s) => `${formatBookingPct(s.active, s.total)}% of total`,
+    sub: (s) =>
+      s.totalGuestsRegistered > 0
+        ? `${formatBookingPct(s.active, s.totalGuestsRegistered)}% of guests`
+        : "0% of guests",
   },
   {
     key: "pending",
     label: "Pending",
     icon: Clock3,
     iconWrap: "bg-[#ffedd5] text-[#d97706]",
-    sub: (s) => `${formatBookingPct(s.pending, s.total)}% of total`,
+    sub: (s) =>
+      s.totalGuestsRegistered > 0
+        ? `${formatBookingPct(s.pending, s.totalGuestsRegistered)}% of guests`
+        : "0% of guests",
   },
   {
     key: "checkedIn",
     label: "Checked In",
     icon: MapPin,
     iconWrap: "bg-[#ede9fe] text-[#7c3aed]",
-    sub: (s) => `${formatBookingPct(s.checkedIn, s.total)}% of total`,
+    sub: (s) =>
+      s.totalGuestsRegistered > 0
+        ? `${formatBookingPct(s.checkedIn, s.totalGuestsRegistered)}% of guests`
+        : "0% of guests",
   },
 ];
 

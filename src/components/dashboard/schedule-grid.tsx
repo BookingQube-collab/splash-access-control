@@ -441,7 +441,7 @@ function GuestCountCard({ count }: { count: number }) {
       <span className={cn("font-display text-2xl font-bold leading-none tabular-nums", tone.number)}>
         {count}
       </span>
-      <span className={cn("mt-1 text-[10px] font-medium", tone.label)}>Total Guests</span>
+      <span className={cn("mt-1 text-[10px] font-medium", tone.label)}>Registered</span>
     </div>
   );
 }

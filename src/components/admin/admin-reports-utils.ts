@@ -13,7 +13,16 @@ export type AdminReportsData = {
   guestsBySlot: { slotName: string; registrations: number; guests: number }[];
   scansByResult: Record<string, number>;
   scansByMode: Record<string, number>;
-  scansByDay: { date: string; total: number; valid: number; invalid: number }[];
+  scansByDay: { date: string; total: number; valid: number; invalid: number; checkins: number }[];
+  recentScanActivity: {
+    id: string;
+    name: string;
+    event: string;
+    slot: string;
+    status: "checked_in" | "pending";
+    time: string;
+  }[];
+  validEntryScans: number;
   capacityBySlot: {
     slotId: string;
     slotName: string;
@@ -62,10 +71,15 @@ export function computeReportsKpis(data: AdminReportsData): ReportsKpiStats {
   const cancelled = [...CANCELLED_STATUSES].reduce((s, k) => s + (by[k] ?? 0), 0);
   const activeReg = pending + checkedIn;
   const totalReg = data.totalReg;
-  const activePct = totalReg > 0 ? Math.round((activeReg / totalReg) * 1000) / 10 : 0;
-  const pendingPct = totalReg > 0 ? Math.round((pending / totalReg) * 1000) / 10 : 0;
-  const checkedInPct = totalReg > 0 ? Math.round((checkedIn / totalReg) * 1000) / 10 : 0;
-  const cancelledPct = totalReg > 0 ? Math.round((cancelled / totalReg) * 1000) / 10 : 0;
+  const totalGuests = data.totalGuests;
+  const activePct =
+    totalGuests > 0 ? Math.round((activeReg / totalGuests) * 1000) / 10 : 0;
+  const pendingPct =
+    totalGuests > 0 ? Math.round((pending / totalGuests) * 1000) / 10 : 0;
+  const checkedInPct =
+    totalGuests > 0 ? Math.round((checkedIn / totalGuests) * 1000) / 10 : 0;
+  const cancelledPct =
+    totalGuests > 0 ? Math.round((cancelled / totalGuests) * 1000) / 10 : 0;
 
   return {
     totalReg,
@@ -390,6 +404,7 @@ export function exportReportsCsv(
     `Total Registrations,${data.totalReg}`,
     `Total Guests,${data.totalGuests}`,
     `Valid Scans,${data.validScans}`,
+    `Entry Check-ins,${data.validEntryScans ?? 0}`,
     `Invalid Scans,${data.invalidScans}`,
     "",
     "By Status",
@@ -405,9 +420,9 @@ export function exportReportsCsv(
     lines.push(`${row.date},${row.registrations},${row.guests}`);
   }
 
-  lines.push("", "Scans By Day", "Date,Total,Valid,Invalid");
+  lines.push("", "Scans By Day", "Date,Check-ins,Total,Valid,Invalid");
   for (const row of data.scansByDay) {
-    lines.push(`${row.date},${row.total},${row.valid},${row.invalid}`);
+    lines.push(`${row.date},${row.checkins ?? 0},${row.total},${row.valid},${row.invalid}`);
   }
 
   const blob = new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8" });

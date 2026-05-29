@@ -5,8 +5,16 @@ import { getAuthContext } from "@/lib/server-auth";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { DashboardDaySlotUsage, DashboardRegistrationCard, DashboardSchedulePayload, DashboardSlotRow } from "@/lib/dashboard.types";
 import { addDays, endOfMonth, startOfMonth, startOfWeek } from "date-fns";
-import { isPassActive, passBookingDate, passEnd, type PassTimingInput } from "@/lib/pass-active";
+import {
+  isPassActive,
+  passBookingDate,
+  passEnd,
+  registrationBookingYmd,
+  type PassTimingInput,
+} from "@/lib/pass-active";
+import { countActionableInvalidScans } from "@/lib/scan-metrics";
 import { isSlotPastForDate } from "@/lib/slot-time";
+import { localCalendarDayBoundsIso } from "@/lib/date-bounds";
 import { clampBookingDate, eventDateRange, formatYmd, maxYmd, normalizePhoneForLookup, parseYmd, todayYmd } from "@/lib/utils";
 
 const publicEventSchema = z.object({
@@ -313,78 +321,223 @@ export async function getPass(input: { token: string }) {
 export async function getDashboardCounts(input?: { eventId?: string }) {
   const data = z.object({ eventId: z.string().uuid().optional() }).parse(input ?? {});
   const { supabase } = await getAuthContext();
-    const today = new Date().toISOString().slice(0, 10);
-    // All active events (for filter dropdown)
-    const { data: allEvents } = await supabase
-      .from("events").select("*").eq("is_active", true).order("start_date", { ascending: false });
-    const allEventList = allEvents ?? [];
+  const today = todayYmd();
+  const { eventsOut, evs, selectedEventId } = await resolveDashboardEvents(supabase, data.eventId);
 
-    let evs: any[] = [];
-    if (data.eventId) {
-      evs = allEventList.filter((e) => e.id === data.eventId);
-    } else {
-      // Default: events covering today, fallback to most recent
-      evs = allEventList.filter((e) => e.start_date <= today && e.end_date >= today);
-      if (evs.length === 0 && allEventList.length > 0) evs = [allEventList[0]];
-    }
+  const eventDaysById = Object.fromEntries(eventsOut.map((e) => [e.id, e.days]));
 
-    const eventDaysById: Record<string, number> = {};
-    for (const e of allEventList) {
-      const start = new Date(e.start_date);
-      const end = new Date(e.end_date);
-      const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
-      eventDaysById[e.id] = days;
-    }
+  if (evs.length === 0) return { events: eventsOut, slots: [], selectedEventId: data.eventId ?? null };
+  const eventIds = evs.map((e) => e.id);
+  const { data: slots } = await supabase.from("slots").select("*").in("event_id", eventIds).order("starts_at");
 
-    const eventsOut = allEventList.map((e) => ({
-      id: e.id, name: e.name, start_date: e.start_date, end_date: e.end_date, days: eventDaysById[e.id],
-    }));
+  const bookedStatuses = new Set(["active", "entered", "exited", "auto_exited"]);
 
-    if (evs.length === 0) return { events: eventsOut, slots: [], selectedEventId: data.eventId ?? null };
-    const eventIds = evs.map((e) => e.id);
-    const { data: slots } = await supabase.from("slots").select("*").in("event_id", eventIds).order("starts_at");
-    const result = await Promise.all(
-      (slots ?? []).map(async (s) => {
-        const [activeRows, enteredRows, exitedRows, autoExitedRows, invalid] = await Promise.all([
-          supabase.from("registrations").select("guest_count").eq("slot_id", s.id).eq("status", "active"),
-          supabase.from("registrations").select("guest_count").eq("slot_id", s.id).eq("status", "entered"),
-          supabase.from("registrations").select("guest_count").eq("slot_id", s.id).eq("status", "exited"),
-          supabase.from("registrations").select("guest_count").eq("slot_id", s.id).eq("status", "auto_exited"),
-          supabase.from("scan_events").select("*", { count: "exact", head: true }).eq("slot_id", s.id).eq("result", "invalid"),
-        ]);
-        const sumG = (rows: any) => (rows.data ?? []).reduce((a: number, r: any) => a + (r.guest_count ?? 1), 0);
-        const active = sumG(activeRows);
-        const entered = sumG(enteredRows);
-        const exited = sumG(exitedRows);
-        const auto_exited = sumG(autoExitedRows);
-        const used = active + entered;
-        // Sum of guest_count across non-expired/invalid registrations (not registration row count).
-        const booked = active + entered + exited + auto_exited;
-        const eventDays = eventDaysById[s.event_id] ?? 1;
-        return {
-          id: s.id,
-          name: s.name,
-          starts_at: s.starts_at,
-          ends_at: s.ends_at,
-          capacity: s.capacity,
-          event_id: s.event_id,
-          event_days: eventDays,
-          total_capacity: s.capacity * eventDays,
-          active,
-          entered,
-          exited,
-          auto_exited,
-          booked,
-          invalid: invalid.count ?? 0,
-          remaining: Math.max(0, s.capacity - used),
-        };
-      })
-    );
-    return { events: eventsOut, slots: result, selectedEventId: data.eventId ?? evs[0]?.id ?? null };
+  const result = await Promise.all(
+    (slots ?? []).map(async (s) => {
+      const { startIso, endIso } = localCalendarDayBoundsIso(today);
+      const [registrationRows, invalidScanRows] = await Promise.all([
+        supabase
+          .from("registrations")
+          .select("guest_count, created_at, status")
+          .eq("slot_id", s.id)
+          .in("status", ["active", "entered", "exited", "auto_exited"]),
+        supabase
+          .from("scan_events")
+          .select("registration_id, registrations(status)")
+          .eq("slot_id", s.id)
+          .eq("result", "invalid")
+          .gte("scanned_at", startIso)
+          .lt("scanned_at", endIso),
+      ]);
+
+      const regs = registrationRows.data ?? [];
+      const activeAll = sumRegistrationGuestCount(regs.filter((r) => r.status === "active"));
+      const enteredToday = sumGuestsForBookingDay(regs, today, new Set(["entered"]));
+      const activeToday = sumGuestsForBookingDay(regs, today, new Set(["active"]));
+      const bookedToday = sumGuestsForBookingDay(regs, today, bookedStatuses);
+      const exited = sumRegistrationGuestCount(regs.filter((r) => r.status === "exited"));
+      const auto_exited = sumRegistrationGuestCount(regs.filter((r) => r.status === "auto_exited"));
+      const usedToday = activeToday + enteredToday;
+      const booked = bookedToday;
+      const eventDays = eventDaysById[s.event_id] ?? 1;
+      return {
+        id: s.id,
+        name: s.name,
+        starts_at: s.starts_at,
+        ends_at: s.ends_at,
+        capacity: s.capacity,
+        event_id: s.event_id,
+        event_days: eventDays,
+        total_capacity: s.capacity * eventDays,
+        active: activeAll,
+        entered: enteredToday,
+        exited,
+        auto_exited,
+        booked,
+        invalid: countActionableInvalidScans(
+          (invalidScanRows.data ?? []).map((row) => ({
+            result: "invalid",
+            registration_id: row.registration_id,
+            registrations: row.registrations,
+          })),
+        ),
+        remaining: Math.max(0, s.capacity - usedToday),
+      };
+    }),
+  );
+  return { events: eventsOut, slots: result, selectedEventId: data.eventId ?? selectedEventId };
 }
 
 function bookingDateFromCreatedAt(iso: string): string {
-  return passBookingDate({ created_at: iso });
+  return registrationBookingYmd(iso);
+}
+
+type EntryCheckInReg = {
+  id: string;
+  status: string;
+  created_at: string;
+  customer_name: string;
+  guest_count?: number | null;
+  mobile?: string | null;
+};
+
+type EntryCheckInSlot = { id: string; name: string; starts_at: string; ends_at: string };
+
+async function insertValidScanEvent(
+  supabase: Awaited<ReturnType<typeof getAuthContext>>["supabase"],
+  userId: string,
+  registrationId: string,
+  slotId: string,
+  mode: "entry" | "exit",
+) {
+  const { error: scanError } = await supabase.from("scan_events").insert({
+    registration_id: registrationId,
+    slot_id: slotId,
+    mode,
+    result: "valid",
+    scanner_user_id: userId,
+  });
+  if (scanError) {
+    await supabaseAdmin.from("scan_events").insert({
+      registration_id: registrationId,
+      slot_id: slotId,
+      mode,
+      result: "valid",
+      scanner_user_id: userId,
+    });
+  }
+}
+
+/** Record entry check-in; returns false when status was not updated. */
+async function recordEntryCheckIn(
+  supabase: Awaited<ReturnType<typeof getAuthContext>>["supabase"],
+  userId: string,
+  reg: EntryCheckInReg,
+  slot: EntryCheckInSlot,
+  opts?: { skipPassValidation?: boolean },
+) {
+  const timing: PassTimingInput = {
+    booking_date: bookingDateFromCreatedAt(reg.created_at),
+    created_at: reg.created_at,
+    slot_starts_at: slot.starts_at,
+    slot_ends_at: slot.ends_at,
+    status: reg.status,
+  };
+  const now = new Date();
+
+  if (!opts?.skipPassValidation && !isPassActive(timing, now)) {
+    const bookingDate = passBookingDate(timing);
+    const today = formatYmd(now);
+    const reason =
+      bookingDate < today
+        ? "Pass expired — booking date has passed"
+        : passEnd(timing).getTime() < now.getTime()
+          ? "Pass expired — slot has ended"
+          : "Pass is no longer valid";
+    await supabase.from("scan_events").insert({
+      registration_id: reg.id,
+      slot_id: slot.id,
+      mode: "entry",
+      result: "invalid",
+      reason,
+      scanner_user_id: userId,
+    });
+    return { valid: false as const, reason, customer: reg.customer_name };
+  }
+
+  if (reg.status === "entered") {
+    await supabase.from("scan_events").insert({
+      registration_id: reg.id,
+      slot_id: slot.id,
+      mode: "entry",
+      result: "invalid",
+      reason: "Already inside",
+      scanner_user_id: userId,
+    });
+    return { valid: false as const, reason: "Already entered", customer: reg.customer_name };
+  }
+
+  if (reg.status === "exited" || reg.status === "auto_exited") {
+    await supabase.from("scan_events").insert({
+      registration_id: reg.id,
+      slot_id: slot.id,
+      mode: "entry",
+      result: "invalid",
+      reason: "Already exited",
+      scanner_user_id: userId,
+    });
+    return { valid: false as const, reason: "Already exited", customer: reg.customer_name };
+  }
+
+  const enteredAt = new Date().toISOString();
+  const { data: updated, error: updateError } = await supabase
+    .from("registrations")
+    .update({ status: "entered", entered_at: enteredAt })
+    .eq("id", reg.id)
+    .eq("status", "active")
+    .select("id")
+    .maybeSingle();
+  if (updateError) throw new Error(updateError.message);
+  if (!updated) {
+    return {
+      valid: false as const,
+      reason: "Could not check in — registration is not active",
+      customer: reg.customer_name,
+    };
+  }
+
+  await insertValidScanEvent(supabase, userId, reg.id, slot.id, "entry");
+
+  return {
+    valid: true as const,
+    reason: "Welcome!",
+    customer: reg.customer_name,
+    slot: slot.name,
+    slot_id: slot.id,
+    slot_starts_at: slot.starts_at,
+    slot_ends_at: slot.ends_at,
+    booking_date: bookingDateFromCreatedAt(reg.created_at),
+    mobile: reg.mobile ?? null,
+    guests: reg.guest_count,
+  };
+}
+
+function sumRegistrationGuestCount(
+  rows: { guest_count?: number | null }[] | null | undefined,
+): number {
+  return (rows ?? []).reduce((total, row) => total + (row.guest_count ?? 1), 0);
+}
+
+function sumGuestsForBookingDay(
+  rows: { guest_count?: number | null; created_at: string; status?: string }[] | null | undefined,
+  bookingDay: string,
+  statuses: Set<string>,
+): number {
+  return (rows ?? []).reduce((total, row) => {
+    if (row.status && !statuses.has(row.status)) return total;
+    if (bookingDateFromCreatedAt(row.created_at) !== bookingDay) return total;
+    return total + (row.guest_count ?? 1);
+  }, 0);
 }
 
 function resolvePassLiveStatus(
@@ -636,64 +789,28 @@ export async function scanQR(input: z.infer<typeof scanSchema>) {
       return { valid: false, reason: "Invalid QR — not found" };
     }
     const slot = reg.slots as { id: string; name: string; starts_at: string; ends_at: string };
-    const now = new Date();
-    const timing: PassTimingInput = {
-      booking_date: bookingDateFromCreatedAt(reg.created_at),
-      created_at: reg.created_at,
-      slot_starts_at: slot.starts_at,
-      slot_ends_at: slot.ends_at,
-      status: reg.status,
-    };
 
     if (data.mode === "entry") {
-      if (!isPassActive(timing, now)) {
-        const bookingDate = passBookingDate(timing);
-        const today = formatYmd(now);
-        const reason =
-          bookingDate < today
-            ? "Pass expired — booking date has passed"
-            : passEnd(timing).getTime() < now.getTime()
-              ? "Pass expired — slot has ended"
-              : "Pass is no longer valid";
-        await supabase.from("scan_events").insert({
-          registration_id: reg.id,
-          slot_id: slot.id,
-          mode: "entry",
-          result: "invalid",
-          reason,
-          scanner_user_id: userId,
-        });
-        return { valid: false, reason, customer: reg.customer_name };
-      }
-      if (reg.status === "entered") {
-        await supabase.from("scan_events").insert({ registration_id: reg.id, slot_id: slot.id, mode: "entry", result: "invalid", reason: "Already inside", scanner_user_id: userId });
-        return { valid: false, reason: "Already entered", customer: reg.customer_name };
-      }
-      if (reg.status === "exited" || reg.status === "auto_exited") {
-        await supabase.from("scan_events").insert({ registration_id: reg.id, slot_id: slot.id, mode: "entry", result: "invalid", reason: "Already exited", scanner_user_id: userId });
-        return { valid: false, reason: "Already exited", customer: reg.customer_name };
-      }
-      await supabase.from("registrations").update({ status: "entered", entered_at: new Date().toISOString() }).eq("id", reg.id);
-      await supabase.from("scan_events").insert({ registration_id: reg.id, slot_id: slot.id, mode: "entry", result: "valid", scanner_user_id: userId });
-      return {
-        valid: true,
-        reason: "Welcome!",
-        customer: reg.customer_name,
-        slot: slot.name,
-        slot_id: slot.id,
-        slot_starts_at: slot.starts_at,
-        slot_ends_at: slot.ends_at,
-        booking_date: bookingDateFromCreatedAt(reg.created_at),
-        mobile: reg.mobile ?? null,
-        guests: reg.guest_count,
-      };
+      return recordEntryCheckIn(supabase, userId, reg as EntryCheckInReg, slot);
     } else {
       if (reg.status !== "entered") {
         await supabase.from("scan_events").insert({ registration_id: reg.id, slot_id: slot.id, mode: "exit", result: "invalid", reason: "Not inside", scanner_user_id: userId });
         return { valid: false, reason: "Guest is not inside", customer: reg.customer_name };
       }
-      await supabase.from("registrations").update({ status: "exited", exited_at: new Date().toISOString() }).eq("id", reg.id);
-      await supabase.from("scan_events").insert({ registration_id: reg.id, slot_id: slot.id, mode: "exit", result: "valid", scanner_user_id: userId });
+      const exitedAt = new Date().toISOString();
+      const { data: exitedRow, error: exitUpdateError } = await supabase
+        .from("registrations")
+        .update({ status: "exited", exited_at: exitedAt })
+        .eq("id", reg.id)
+        .eq("status", "entered")
+        .select("id")
+        .maybeSingle();
+      if (exitUpdateError) throw new Error(exitUpdateError.message);
+      if (!exitedRow) {
+        return { valid: false, reason: "Guest is not inside", customer: reg.customer_name };
+      }
+
+      await insertValidScanEvent(supabase, userId, reg.id, slot.id, "exit");
       return {
         valid: true,
         reason: "Exit recorded",
@@ -795,13 +912,6 @@ export async function getRegistrationsForSlotDay(
 }
 
 /** Lookback for scanner recent list (covers a full event day/shift). */
-/** Local calendar day [start, end) as ISO timestamps for timestamptz filters. */
-function localCalendarDayBoundsIso(ymd: string = todayYmd()): { startIso: string; endIso: string } {
-  const start = parseYmd(ymd);
-  const end = addDays(start, 1);
-  return { startIso: start.toISOString(), endIso: end.toISOString() };
-}
-
 function mapRecentScannerScanRows(
   data: Array<{
     id: string;
@@ -871,10 +981,14 @@ export async function getScannerSidePanelData(limit = 20) {
   };
 }
 
+const posRegisterSchema = registerSchema.extend({
+  auto_check_in: z.boolean().optional(),
+});
+
 // ============ POS ============
-export async function posRegister(input: z.infer<typeof registerSchema>) {
-  const data = registerSchema.parse(input);
-  const { supabase } = await getAuthContext();
+export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
+  const data = posRegisterSchema.parse(input);
+  const { supabase, userId } = await getAuthContext();
   const since = new Date(Date.now() - 30_000).toISOString();
   const bookingDate = data.booking_date;
 
@@ -902,12 +1016,33 @@ export async function posRegister(input: z.infer<typeof registerSchema>) {
   const { scheduleBookingQubeOutboundSync } = await import("@/lib/bookingqube.sync");
 
   if (dupe) {
+    const { data: updatedDupe, error: dupeUpdateError } = await supabase
+      .from("registrations")
+      .update({
+        customer_name: data.customer_name,
+        guest_count: data.guest_count,
+        email: data.email || null,
+      })
+      .eq("id", dupe.id)
+      .select("id, qr_token, status, created_at, customer_name, guest_count, mobile")
+      .single();
+    if (dupeUpdateError) throw new Error(dupeUpdateError.message);
     scheduleBookingQubeOutboundSync(dupe.id);
     if (data.email?.trim()) {
       const { scheduleDigitalPassEmail } = await import("@/lib/mailgun.server");
       scheduleDigitalPassEmail(dupe.id, { email: data.email.trim() });
     }
-    return { id: dupe.id, qr_token: dupe.qr_token };
+    let checkIn: Awaited<ReturnType<typeof recordEntryCheckIn>> | undefined;
+    if (data.auto_check_in) {
+      checkIn = await recordEntryCheckIn(
+        supabase,
+        userId,
+        updatedDupe as EntryCheckInReg,
+        slot as EntryCheckInSlot,
+        { skipPassValidation: true },
+      );
+    }
+    return { id: dupe.id, qr_token: dupe.qr_token, checkIn };
   }
 
   const used = await sumGuests(supabase, data.slot_id, bookingDate);
@@ -923,14 +1058,26 @@ export async function posRegister(input: z.infer<typeof registerSchema>) {
     email: data.email || null,
     guest_count: data.guest_count,
     created_at: createdAt,
-  }).select("id, qr_token").single();
+  })
+    .select("id, qr_token, status, created_at, customer_name, guest_count, mobile")
+    .single();
   if (error) throw new Error(error.message);
   scheduleBookingQubeOutboundSync(reg.id);
   if (data.email?.trim()) {
     const { scheduleDigitalPassEmail } = await import("@/lib/mailgun.server");
     scheduleDigitalPassEmail(reg.id, { email: data.email.trim() });
   }
-  return { id: reg.id, qr_token: reg.qr_token };
+  let checkIn: Awaited<ReturnType<typeof recordEntryCheckIn>> | undefined;
+  if (data.auto_check_in) {
+    checkIn = await recordEntryCheckIn(
+      supabase,
+      userId,
+      reg as EntryCheckInReg,
+      slot as EntryCheckInSlot,
+      { skipPassValidation: true },
+    );
+  }
+  return { id: reg.id, qr_token: reg.qr_token, checkIn };
 }
 
 export async function searchByMobile(input: { mobile: string }) {

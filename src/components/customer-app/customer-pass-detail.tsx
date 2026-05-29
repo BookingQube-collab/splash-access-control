@@ -3,7 +3,7 @@
 import { format } from "date-fns";
 import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Check } from "lucide-react";
+import { Check, X } from "lucide-react";
 import type { CustomerPass } from "./types";
 import { passUrl } from "@/lib/public-url";
 import { isPassActive, passBookingDate, passEnd, passInactiveReason, passStart } from "./utils";
@@ -19,11 +19,14 @@ function passTypeLabel(pass: CustomerPass): string {
 export function CustomerPassDetail({
   pass,
   onAllPasses,
+  onClose,
   embedded = false,
 }: {
   pass: CustomerPass;
   /** Navigate back to the full guest pass list (/my-passes). */
   onAllPasses: () => void;
+  /** Dismiss the pass detail and return to the my-passes list/home. */
+  onClose?: () => void;
   /** Render inside bottom sheet (no full-page chrome). */
   embedded?: boolean;
 }) {
@@ -62,15 +65,25 @@ export function CustomerPassDetail({
     >
       <header
         className={cn(
-          "shrink-0 px-5 pb-6 pt-2 text-white sm:px-6",
+          "relative shrink-0 px-5 pb-6 pt-2 text-white sm:px-6",
           embedded ? "rounded-t-[1.25rem] pt-4" : "px-5 pb-10 pt-6",
         )}
         style={{
           background: "linear-gradient(135deg, #00A9BC 0%, #0a8a96 45%, #7dd3d9 100%)",
         }}
       >
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 active:scale-95"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        ) : null}
         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/85">SummerSplash pass</p>
-        <h1 className="mt-2 font-display text-2xl font-extrabold capitalize leading-tight text-white">{guestDisplay}</h1>
+        <h1 className="mt-2 pr-10 font-display text-2xl font-extrabold capitalize leading-tight text-white">{guestDisplay}</h1>
         <p className="mt-2 text-sm font-medium text-white/90">{subtitle}</p>
       </header>
 

@@ -1,4 +1,6 @@
+import { isCreatedAtCapacityAnchor } from "@/components/admin/admin-bookings-utils";
 import { formatYmd, parseYmd, todayYmd } from "@/lib/utils";
+import { isValid, parseISO } from "date-fns";
 
 /** Fields needed to evaluate whether a pass can be scanned / shown as active. */
 export type PassTimingInput = {
@@ -15,7 +17,16 @@ export type PassTimingInput = {
 /** Local calendar booking day (matches POS `todayYmd` / anchored `created_at`). */
 export function passBookingDate(p: PassTimingInput): string {
   if (p.booking_date) return p.booking_date;
-  return formatYmd(new Date(p.created_at));
+  return registrationBookingYmd(p.created_at);
+}
+
+/** Booking day from `created_at`, respecting POS/public noon capacity anchors. */
+export function registrationBookingYmd(createdAt: string): string {
+  if (isCreatedAtCapacityAnchor(createdAt)) {
+    const d = parseISO(createdAt);
+    if (isValid(d)) return formatYmd(d);
+  }
+  return formatYmd(new Date(createdAt));
 }
 
 export function isPastBookingYmd(ymd: string): boolean {

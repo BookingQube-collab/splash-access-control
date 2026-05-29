@@ -1,13 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { RoleGuard } from "@/components/role-guard";
 import { AdminNavigationProvider } from "@/components/admin/admin-navigation";
 import {
   AdminShell,
-  parseAdminTabParam,
+  adminTabFromSearchParams,
+  persistAdminTab,
   type AdminTabKey,
 } from "@/components/admin/admin-shell";
 import { AdminOverviewSection } from "@/components/admin/admin-overview-section";
@@ -91,11 +92,11 @@ function scrollToAdminSchedule() {
 function Admin() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<AdminTabKey>(() => parseAdminTabParam(searchParams.get("tab")));
+  const tab = adminTabFromSearchParams(searchParams);
 
   useEffect(() => {
-    setTab(parseAdminTabParam(searchParams.get("tab")));
-  }, [searchParams]);
+    persistAdminTab(tab);
+  }, [tab]);
 
   useEffect(() => {
     if (tab !== "overview" || searchParams.get("scroll") !== "schedule") return;
@@ -109,7 +110,7 @@ function Admin() {
 
   const onTabChange = useCallback(
     (key: AdminTabKey) => {
-      setTab(key);
+      persistAdminTab(key);
       const params = new URLSearchParams(searchParams.toString());
       params.delete("scroll");
       if (key === "overview") params.delete("tab");

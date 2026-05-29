@@ -15,6 +15,7 @@ export type AdminFilterChip = {
 
 export type UseAdminTableFiltersOptions<T> = {
   mode?: AdminFilterMode;
+  initialFilters?: AdminTableFilters;
   rows: T[];
   filterRow: (row: T, filters: AdminTableFilters, search: string) => boolean;
   onServerApply?: (filters: AdminTableFilters) => void;
@@ -23,13 +24,16 @@ export type UseAdminTableFiltersOptions<T> = {
 
 export function useAdminTableFilters<T>({
   mode: initialMode = "local",
+  initialFilters,
   rows,
   filterRow,
   onServerApply,
   resolveChips,
 }: UseAdminTableFiltersOptions<T>) {
   const [mode, setMode] = useState<AdminFilterMode>(initialMode);
-  const [filters, setFilters] = useState<AdminTableFilters>(emptyAdminTableFilters);
+  const [filters, setFilters] = useState<AdminTableFilters>(
+    () => initialFilters ?? emptyAdminTableFilters(),
+  );
   const [serverFilters, setServerFilters] = useState<AdminTableFilters>(emptyAdminTableFilters);
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
@@ -107,6 +111,7 @@ export function useAdminTableFilters<T>({
     filters,
     setFilters: patchFilters,
     serverFilters,
+    debouncedSearch,
     filteredRows,
     applyServerFilter,
     clearServerFilters,

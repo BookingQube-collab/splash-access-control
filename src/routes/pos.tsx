@@ -21,6 +21,7 @@ import { PosSection, PosRow, type SlotRow } from "@/components/pos/pos-shared";
 import { PosSlotTypeCards } from "@/components/pos/pos-slot-type-cards";
 import { PosTrustFooter } from "@/components/pos/pos-trust-footer";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { isPastRegistrationBooking, passBookingDate } from "@/lib/pass-active";
 import { isSlotPastForDate } from "@/lib/slot-time";
 import { getPublicEvent, posRegister } from "@/lib/summersplash.functions";
@@ -38,6 +39,25 @@ import {
 } from "@/lib/utils";
 
 import { useAuth } from "@/hooks/use-auth";
+
+const POS_AUTO_SCAN_AFTER_REGISTER_KEY = "pos-auto-scan-after-register";
+
+function readAutoScanAfterRegisterPref(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(POS_AUTO_SCAN_AFTER_REGISTER_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writeAutoScanAfterRegisterPref(on: boolean) {
+  try {
+    window.localStorage.setItem(POS_AUTO_SCAN_AFTER_REGISTER_KEY, on ? "true" : "false");
+  } catch {
+    /* noop */
+  }
+}
 
 export default function POSPage() {
   return (
@@ -65,10 +85,11 @@ function POS() {
   });
 
   const defaultBookingDate = useMemo(() => {
+    if (data?.bookingDate) return data.bookingDate;
     if (!data?.event) return undefined;
     const { start, end } = eventDateRange(data.event);
     return clampBookingDate(todayYmd(), start, end);
-  }, [data?.event]);
+  }, [data?.bookingDate, data?.event]);
 
   const activeDate = bookingDate ?? defaultBookingDate;
 
@@ -155,6 +176,16 @@ function POS() {
   const [scanInput, setScanInput] = useState("");
 
   const [isFs, setIsFs] = useState(false);
+  const [autoScanAfterRegister, setAutoScanAfterRegister] = useState(false);
+
+  useEffect(() => {
+    setAutoScanAfterRegister(readAutoScanAfterRegisterPref());
+  }, []);
+
+  const onAutoScanAfterRegisterChange = (on: boolean) => {
+    setAutoScanAfterRegister(on);
+    writeAutoScanAfterRegisterPref(on);
+  };
 
   useEffect(() => {
     const onChange = () => setIsFs(!!document.fullscreenElement);
@@ -425,6 +456,7 @@ function POS() {
         email: email.trim(),
         guest_count: guests,
         booking_date: activeDate,
+        auto_check_in: autoScanAfterRegister,
       });
       setLastToken(res.qr_token);
       setModalMeta({ name: displayName, slot: slot.name, guests });
@@ -440,6 +472,13 @@ function POS() {
       emailEditedRef.current = false;
       lastLookupKeyRef.current = "";
       refetch();
+      if (autoScanAfterRegister) {
+        if (res.checkIn?.valid) {
+          toast.success("Checked in at entry");
+        } else if (res.checkIn) {
+          toast.error(res.checkIn.reason ?? "Check-in failed");
+        }
+      }
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Registration failed");
     } finally {
@@ -468,6 +507,22 @@ function POS() {
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-[#0a4a52] ring-1 ring-[#dce8ea]">
               <span className="h-1.5 w-1.5 rounded-full bg-[#2db87a] animate-pulse" /> Live
             </span>
+            <label
+              htmlFor="pos-auto-scan-after-register"
+              className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-[#0a4a52] ring-1 ring-[#dce8ea] transition hover:bg-[#eefafb]"
+              title="After registration, record entry scan (checked in)"
+            >
+              <span className="hidden max-w-[9rem] leading-tight sm:inline md:max-w-none">
+                Check in after registration
+              </span>
+              <span className="sm:hidden">Auto scan</span>
+              <Switch
+                id="pos-auto-scan-after-register"
+                checked={autoScanAfterRegister}
+                onCheckedChange={onAutoScanAfterRegisterChange}
+                className="data-[state=checked]:bg-[#00a8b5]"
+              />
+            </label>
             <button
               type="button"
               onClick={() => setPassSearchOpen(true)}

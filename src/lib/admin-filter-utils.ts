@@ -13,6 +13,9 @@ export type AdminRegistrationRow = {
   created_at: string;
   qr_token: string;
   slot_id?: string;
+  pass_email_status?: string | null;
+  pass_email_sent_at?: string | null;
+  pass_email_error?: string | null;
   slots?: {
     id?: string;
     name?: string;

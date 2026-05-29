@@ -511,7 +511,12 @@ export default function MyPassesPage({ routePassId = "" }: { routePassId?: strin
             className="flex max-h-[min(92vh,820px)] w-[min(calc(100vw-2rem),430px)] max-w-[430px] flex-col gap-0 overflow-hidden border-0 bg-white p-0 shadow-2xl sm:rounded-[1.5rem]"
           >
             {activePass && passDialogView === "detail" ? (
-              <CustomerPassDetail pass={activePass} onAllPasses={openAllPassesPanel} embedded />
+              <CustomerPassDetail
+                pass={activePass}
+                onAllPasses={openAllPassesPanel}
+                onClose={goToPassList}
+                embedded
+              />
             ) : activePass ? (
               <CustomerAllPassesPanel
                 passes={displayPasses}

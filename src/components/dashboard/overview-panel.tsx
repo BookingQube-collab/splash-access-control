@@ -213,15 +213,14 @@ export function OverviewPanel({
   const today = todayYmd();
 
   const totalCapacity = sumOverviewTotalCapacity(slots);
-  const totalGuestsBooked = sumOverviewGuestsBooked(slots);
-  const totalInside = slots.reduce((a, s) => a + (s.entered ?? 0), 0);
+  const todayUsage = schedule.daySlotUsage.filter((u) => u.date === today);
+  const totalGuestsBookedToday = todayUsage.reduce((a, u) => a + u.booked, 0);
+  const totalInsideToday = todayUsage.reduce((a, u) => a + u.entered, 0);
+  const totalGuestsBooked = totalGuestsBookedToday || sumOverviewGuestsBooked(slots);
+  const totalInside = totalInsideToday || slots.reduce((a, s) => a + (s.entered ?? 0), 0);
   const soldPct = capacitySoldPercent(totalGuestsBooked, totalCapacity);
   const checkInPct =
     totalGuestsBooked > 0 ? Math.round((totalInside / totalGuestsBooked) * 100) : 0;
-
-
-
-  const todayUsage = schedule.daySlotUsage.filter((u) => u.date === today);
 
   const inProgress = schedule.slots
 
@@ -229,17 +228,19 @@ export function OverviewPanel({
 
       const usage = todayUsage.find((u) => u.slot_id === slot.id);
 
-      const booked = usage?.booked ?? 0;
+      const checkedIn = usage?.entered ?? 0;
+
+      const registered = usage?.booked ?? 0;
 
       const cap = usage?.capacity ?? slot.capacity;
 
-      const pct = cap > 0 ? Math.round((booked / cap) * 100) : 0;
+      const pct = cap > 0 ? Math.round((checkedIn / cap) * 100) : 0;
 
-      return { slot, pct, booked, cap, colorIndex: i };
+      return { slot, pct, checkedIn, registered, cap, colorIndex: i };
 
     })
 
-    .filter((x) => x.booked > 0 || x.pct > 0)
+    .filter((x) => x.registered > 0 || x.checkedIn > 0 || x.pct > 0)
 
     .sort((a, b) => b.pct - a.pct)
 
@@ -313,7 +314,7 @@ export function OverviewPanel({
 
           <ul className="space-y-3">
 
-            {inProgress.map(({ slot, pct, booked, cap }) => (
+            {inProgress.map(({ slot, pct, checkedIn, registered, cap }) => (
 
               <li key={slot.id} className="flex items-center gap-3">
 
@@ -331,7 +332,9 @@ export function OverviewPanel({
 
                   <p className="text-xs text-[#64748b]">
 
-                    {formatSlotTimeRange(slot.starts_at, slot.ends_at)} · {booked}/{cap} guests
+                    {formatSlotTimeRange(slot.starts_at, slot.ends_at)} · {checkedIn}/{cap} checked in
+
+                    {registered > checkedIn ? ` · ${registered} registered` : ""}
 
                   </p>
 

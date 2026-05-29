@@ -19,10 +19,12 @@ import {
   adminListEvents,
   adminListRegistrations,
   adminListSlots,
+  adminRegistrationBookingStats,
+  adminResendDigitalPassEmail,
   adminUpdateRegistration,
 } from "@/lib/admin.functions";
 import { adminListQueryDefaults } from "@/lib/admin-query";
-import { formatActionError } from "@/lib/utils";
+import { formatActionError, todayYmd } from "@/lib/utils";
 import {
   buildRegistrationFilterChips,
   filterRegistrationRow,
@@ -35,14 +37,24 @@ import {
 } from "@/lib/admin-filters.types";
 
 const PAGE_SIZE = 12;
+const LOCAL_FETCH_LIMIT = 500;
+const SERVER_FILTER_DEBOUNCE_MS = 350;
+
+function defaultBookingsFilters(): AdminTableFilters {
+  const today = todayYmd();
+  return { ...emptyAdminTableFilters(), dateFrom: today, dateTo: today };
+}
 
 export function AdminBookingsSection() {
   const qc = useQueryClient();
   const { consumeBookingsSearch } = useAdminNavigation();
-  const [serverFilters, setServerFilters] = useState<AdminTableFilters>(emptyAdminTableFilters());
+  const [serverFilters, setServerFilters] = useState<AdminTableFilters>(defaultBookingsFilters);
   const [page, setPage] = useState(1);
   const [editRow, setEditRow] = useState<AdminRegistrationRow | null>(null);
   const [saving, setSaving] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
+  const serverFilterPayload = useMemo(() => toServerFilters(serverFilters), [serverFilters]);
 
   const { data: eventsData } = useQuery({
     queryKey: ["a-events"],
@@ -55,13 +67,55 @@ export function AdminBookingsSection() {
     ...adminListQueryDefaults,
   });
 
+  const onServerApply = useCallback((f: AdminTableFilters) => {
+    setServerFilters(f);
+    setPage(1);
+  }, []);
+
+  const tableFilters = useAdminTableFilters({
+    mode: "server",
+    initialFilters: defaultBookingsFilters(),
+    rows: [],
+    filterRow: filterRegistrationRow,
+    onServerApply,
+  });
+
+  const listPageSize = PAGE_SIZE;
+
   const { data, isFetching, dataUpdatedAt, refetch } = useQuery({
-    queryKey: ["a-regs", serverFilters],
-    queryFn: () => adminListRegistrations(toServerFilters(serverFilters)),
+    queryKey: ["a-regs", serverFilterPayload, page, listPageSize],
+    queryFn: () =>
+      adminListRegistrations(serverFilterPayload, {
+        page,
+        pageSize: listPageSize,
+      }),
+    enabled: tableFilters.mode === "server",
     ...adminListQueryDefaults,
   });
 
   const rows = (data?.registrations ?? []) as unknown as AdminRegistrationRow[];
+  const serverTotal = data?.total ?? 0;
+
+  const { data: statsData, isFetching: statsFetching } = useQuery({
+    queryKey: ["a-regs-stats", serverFilterPayload],
+    queryFn: () => adminRegistrationBookingStats(serverFilterPayload),
+    enabled: tableFilters.mode === "server",
+    ...adminListQueryDefaults,
+  });
+
+  const { data: localBulkData, isFetching: localBulkFetching } = useQuery({
+    queryKey: ["a-regs-local", serverFilterPayload],
+    queryFn: () =>
+      adminListRegistrations(serverFilterPayload, {
+        page: 1,
+        pageSize: LOCAL_FETCH_LIMIT,
+      }),
+    enabled: tableFilters.mode === "local",
+    ...adminListQueryDefaults,
+  });
+
+  const localRows = (localBulkData?.registrations ?? []) as unknown as AdminRegistrationRow[];
+
   const events = eventsData?.events ?? [];
   const slots = slotsData?.slots ?? [];
 
@@ -75,16 +129,18 @@ export function AdminBookingsSection() {
     return map;
   }, [slots]);
 
-  const onServerApply = useCallback((f: AdminTableFilters) => {
-    setServerFilters(f);
-    setPage(1);
-  }, []);
-
-  const tableFilters = useAdminTableFilters({
-    rows,
-    filterRow: filterRegistrationRow,
+  useEffect(() => {
+    if (tableFilters.mode !== "server") return;
+    const timer = window.setTimeout(() => {
+      onServerApply({ ...tableFilters.filters, search: tableFilters.debouncedSearch });
+    }, SERVER_FILTER_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [
+    tableFilters.mode,
+    tableFilters.filters,
+    tableFilters.debouncedSearch,
     onServerApply,
-  });
+  ]);
 
   const { eventOptions, slotOptions, statusOptions, eventLabel, slotLabel } = useAdminFilterOptions(
     events,
@@ -96,6 +152,8 @@ export function AdminBookingsSection() {
 
   const invalidateRegistrations = () => {
     void qc.invalidateQueries({ queryKey: ["a-regs"] });
+    void qc.invalidateQueries({ queryKey: ["a-regs-stats"] });
+    void qc.invalidateQueries({ queryKey: ["a-regs-local"] });
     void qc.invalidateQueries({ queryKey: ["a-slots"] });
   };
 
@@ -140,6 +198,24 @@ export function AdminBookingsSection() {
     }
   };
 
+  const handleResend = async (row: AdminRegistrationRow) => {
+    if (!row.email?.trim()) {
+      toast.error("This registration has no email address");
+      return;
+    }
+    setResendingId(row.id);
+    try {
+      await adminResendDigitalPassEmail({ id: row.id });
+      toast.success(`Pass email sent to ${row.email}`);
+      invalidateRegistrations();
+    } catch (e: unknown) {
+      toast.error(formatActionError(e));
+      invalidateRegistrations();
+    } finally {
+      setResendingId(null);
+    }
+  };
+
   const handleDelete = async (row: AdminRegistrationRow) => {
     const label = row.customer_name || row.mobile;
     if (!confirm(`Delete registration for ${label}? This frees ${row.guest_count} spot(s) on the slot.`)) {
@@ -155,15 +231,37 @@ export function AdminBookingsSection() {
   };
 
   const chips = buildRegistrationFilterChips(tableFilters.filters, eventLabel, slotLabel);
-  const displayRows =
-    tableFilters.mode === "local" ? tableFilters.filteredRows : rows;
 
-  const stats = useMemo(() => computeBookingStats(displayRows), [displayRows]);
+  const localFilteredRows = useMemo(() => {
+    if (tableFilters.mode !== "local") return [];
+    const local = { ...tableFilters.filters, search: tableFilters.debouncedSearch };
+    return localRows.filter((row) =>
+      filterRegistrationRow(row, local, tableFilters.debouncedSearch),
+    );
+  }, [
+    tableFilters.mode,
+    localRows,
+    tableFilters.filters,
+    tableFilters.debouncedSearch,
+  ]);
 
-  const total = displayRows.length;
+  const displayRows = tableFilters.mode === "server" ? rows : localFilteredRows;
+
+  const stats = useMemo(() => {
+    if (tableFilters.mode === "server" && statsData?.stats) {
+      return statsData.stats;
+    }
+    return computeBookingStats(displayRows);
+  }, [tableFilters.mode, statsData?.stats, displayRows]);
+
+  const total =
+    tableFilters.mode === "server" ? serverTotal : displayRows.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pageRows = displayRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pageRows =
+    tableFilters.mode === "server"
+      ? displayRows
+      : displayRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   useEffect(() => {
     setPage(1);
@@ -175,16 +273,25 @@ export function AdminBookingsSection() {
     tableFilters.filters.dateFrom,
     tableFilters.filters.dateTo,
     tableFilters.mode,
+    serverFilterPayload,
   ]);
 
   useEffect(() => {
     const search = consumeBookingsSearch();
     if (search) {
       tableFilters.setFilters({ search });
+      if (tableFilters.mode === "server") {
+        onServerApply({ ...tableFilters.filters, search });
+      }
     }
     // Apply pending search once when the Bookings tab mounts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (tableFilters.mode !== "local") return;
+    onServerApply(tableFilters.filters);
+  }, [tableFilters.mode]);
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-6">
@@ -219,12 +326,20 @@ export function AdminBookingsSection() {
         slotOptions={slotOptions}
         statusOptions={statusOptions}
         onApplyServer={tableFilters.applyServerFilter}
-        onClearServer={tableFilters.clearServerFilters}
+        onClearServer={() => {
+          const empty = defaultBookingsFilters();
+          tableFilters.clearServerFilters();
+          onServerApply(empty);
+        }}
         chips={chips}
         onRemoveChip={tableFilters.removeChip}
         onClearAll={tableFilters.clearAll}
         hasActive={tableFilters.hasActive}
-        applying={isFetching && tableFilters.mode === "server"}
+        applying={
+          tableFilters.mode === "server"
+            ? isFetching || statsFetching
+            : localBulkFetching
+        }
       />
 
       <AdminBookingsTable
@@ -234,12 +349,14 @@ export function AdminBookingsSection() {
         page={safePage}
         pageSize={PAGE_SIZE}
         mode={tableFilters.mode}
-        isFetching={isFetching}
+        isFetching={isFetching || localBulkFetching}
         dataUpdatedAt={dataUpdatedAt}
         onPageChange={setPage}
         onRefresh={() => void refetch()}
         onEdit={setEditRow}
         onDelete={(row) => void handleDelete(row)}
+        onResend={(row) => void handleResend(row)}
+        resendingId={resendingId}
       />
 
       <AdminBookingsEditDialog

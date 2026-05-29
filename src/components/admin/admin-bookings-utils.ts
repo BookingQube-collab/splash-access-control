@@ -65,8 +65,10 @@ export const BOOKING_STATUS_STYLES: Record<BookingDisplayStatus, string> = {
   Exited: "bg-[#f1f5f9] text-[#64748b]",
 };
 
+type BookingStatsRow = Pick<AdminRegistrationRow, "status" | "guest_count">;
+
 /** Client-side status counts from loaded registration rows (same dataset as the table). */
-export function computeBookingStats(rows: AdminRegistrationRow[]): BookingStats {
+export function computeBookingStats(rows: BookingStatsRow[]): BookingStats {
   const stats: BookingStats = {
     total: rows.length,
     active: 0,
@@ -76,14 +78,15 @@ export function computeBookingStats(rows: AdminRegistrationRow[]): BookingStats 
   };
 
   for (const row of rows) {
-    stats.totalGuestsRegistered += row.guest_count ?? 0;
+    const guests = row.guest_count ?? 1;
+    stats.totalGuestsRegistered += guests;
 
     if (row.status === "active") {
-      stats.pending++;
-      stats.active++;
+      stats.pending += guests;
+      stats.active += guests;
     } else if (row.status === "entered") {
-      stats.checkedIn++;
-      stats.active++;
+      stats.checkedIn += guests;
+      stats.active += guests;
     }
   }
 
@@ -102,6 +105,31 @@ export function bookingDisplayStatus(raw: string): BookingDisplayStatus {
     case "exited":
     case "auto_exited":
       return "Exited";
+    default:
+      return "Pending";
+  }
+}
+
+export type EmailDisplayStatus = "Sent" | "Failed" | "Pending" | "No email";
+
+export const EMAIL_STATUS_STYLES: Record<EmailDisplayStatus, string> = {
+  Sent: "bg-[#dcfce7] text-[#16a34a]",
+  Failed: "bg-[#fee2e2] text-[#dc2626]",
+  Pending: "bg-[#ffedd5] text-[#d97706]",
+  "No email": "bg-[#f1f5f9] text-[#94a3b8]",
+};
+
+/** Maps a registration's email + pass_email_status to a display badge label. */
+export function emailDisplayStatus(
+  passEmailStatus: string | null | undefined,
+  email: string | null | undefined,
+): EmailDisplayStatus {
+  if (!email?.trim()) return "No email";
+  switch (passEmailStatus) {
+    case "sent":
+      return "Sent";
+    case "failed":
+      return "Failed";
     default:
       return "Pending";
   }

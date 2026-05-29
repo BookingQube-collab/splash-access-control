@@ -101,9 +101,12 @@ export type OverviewSlotCounts = {
   /** Sum of guest_count for active/entered/exited/auto_exited registrations. */
   booked?: number;
   active?: number;
+  /** Guests checked in for today's booking day (sum of guest_count, not row count). */
   entered?: number;
   exited?: number;
   auto_exited?: number;
+  /** Failed scan attempts today that still need attention (not post-check-in duplicates). */
+  invalid?: number;
   total_capacity?: number;
   event_days?: number;
 };

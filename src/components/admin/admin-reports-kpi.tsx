@@ -53,7 +53,7 @@ const KPI_CARDS: KpiConfig[] = [
   {
     label: "Active",
     value: "activeReg",
-    sub: (s) => (s.totalReg > 0 ? `${s.activePct}% of total` : null),
+    sub: (s) => (s.totalGuests > 0 ? `${s.activePct}% of guests` : null),
     icon: CircleCheck,
     accent: "text-[#2563eb]",
     iconWrap: "bg-[#dbeafe] text-[#2563eb]",
@@ -61,7 +61,7 @@ const KPI_CARDS: KpiConfig[] = [
   {
     label: "Pending",
     value: "pending",
-    sub: (s) => (s.totalReg > 0 ? `${s.pendingPct}% of total` : null),
+    sub: (s) => (s.totalGuests > 0 ? `${s.pendingPct}% of guests` : null),
     icon: Clock3,
     accent: "text-[#d97706]",
     iconWrap: "bg-[#ffedd5] text-[#d97706]",
@@ -69,7 +69,7 @@ const KPI_CARDS: KpiConfig[] = [
   {
     label: "Checked In",
     value: "checkedIn",
-    sub: (s) => (s.totalReg > 0 ? `${s.checkedInPct}% of total` : null),
+    sub: (s) => (s.totalGuests > 0 ? `${s.checkedInPct}% of guests` : null),
     icon: LogIn,
     accent: "text-[#7c3aed]",
     iconWrap: "bg-[#ede9fe] text-[#7c3aed]",
@@ -77,7 +77,7 @@ const KPI_CARDS: KpiConfig[] = [
   {
     label: "Cancelled",
     value: "cancelled",
-    sub: (s) => (s.totalReg > 0 ? `${s.cancelledPct}% of total` : null),
+    sub: (s) => (s.totalGuests > 0 ? `${s.cancelledPct}% of guests` : null),
     icon: XCircle,
     accent: "text-[#dc2626]",
     iconWrap: "bg-[#fee2e2] text-[#dc2626]",

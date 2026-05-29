@@ -51,7 +51,7 @@ export function AdminOverviewStats({ slots }: { slots: OverviewSlotCounts[] }) {
   const totalGuestsBooked = sumOverviewGuestsBooked(slots);
   const inside = slots.reduce((a, s) => a + (s.entered ?? 0), 0);
   const active = slots.reduce((a, s) => a + (s.active ?? 0), 0);
-  const invalid = slots.reduce((a, s) => a + ((s as { invalid?: number }).invalid ?? 0), 0);
+  const invalid = slots.reduce((a, s) => a + (s.invalid ?? 0), 0);
 
   const soldPct = capacitySoldPercent(totalGuestsBooked, totalCapacity);
   const availPct = capacityAvailablePercent(totalGuestsBooked, totalCapacity);
@@ -81,7 +81,7 @@ export function AdminOverviewStats({ slots }: { slots: OverviewSlotCounts[] }) {
     {
       key: "inside",
       title: "Inside Now",
-      subtitle: "Checked in guests",
+      subtitle: "Checked in today (guests)",
       icon: Activity,
       iconWrap: "bg-[#dcfce7] text-[#16a34a]",
       value: inside,

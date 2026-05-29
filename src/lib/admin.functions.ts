@@ -9,9 +9,18 @@ import {
   isBookingQubeIntegrationTableError,
 } from "@/lib/bookingqube.integration";
 import { getAuthContext } from "@/lib/server-auth";
+import { localCalendarRangeBoundsIso } from "@/lib/date-bounds";
+import {
+  countActionableInvalidScans,
+  isActionableInvalidScan,
+  isValidEntryCheckin,
+  registrationStatusFromScanRow,
+} from "@/lib/scan-metrics";
+import { formatYmd } from "@/lib/utils";
 import { getDashboardCounts, getDashboardSchedule } from "@/lib/summersplash.functions";
 import { getSupabaseAdminClientOrNull } from "@/integrations/supabase/client.server";
 import type { AdminServerFilters } from "@/lib/admin-filters.types";
+import { computeBookingStats } from "@/components/admin/admin-bookings-utils";
 
 const adminListFiltersSchema = z
   .object({
@@ -29,6 +38,38 @@ const adminListFiltersSchema = z
 function endOfDayIso(ymd: string) {
   return `${ymd}T23:59:59.999Z`;
 }
+
+type ParsedRegistrationFilters = z.infer<typeof adminListFiltersSchema>;
+
+function registrationSlotJoin(parsed: ParsedRegistrationFilters) {
+  return parsed?.eventId ? "slots!inner" : "slots";
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyRegistrationListFilters(query: any, parsed: ParsedRegistrationFilters) {
+  if (parsed?.slotId) query = query.eq("slot_id", parsed.slotId);
+  if (parsed?.status) query = query.eq("status", parsed.status);
+  if (parsed?.dateFrom || parsed?.dateTo) {
+    const { startIso, endIso } = localCalendarRangeBoundsIso(parsed?.dateFrom, parsed?.dateTo);
+    if (startIso) query = query.gte("created_at", startIso);
+    if (endIso) query = query.lt("created_at", endIso);
+  }
+  if (parsed?.search) {
+    const term = parsed.search.replace(/[%_,]/g, "");
+    if (term) {
+      query = query.or(
+        `customer_name.ilike.%${term}%,mobile.ilike.%${term}%,email.ilike.%${term}%`,
+      );
+    }
+  }
+  if (parsed?.eventId) query = query.eq("slots.event_id", parsed.eventId);
+  return query;
+}
+
+const adminListPaginationSchema = z.object({
+  page: z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(1).max(500).default(12),
+});
 
 async function assertAdmin(supabase: Awaited<ReturnType<typeof getAuthContext>>["supabase"], userId: string) {
   const { data: isAdmin, error } = await supabase.rpc("has_role", {
@@ -251,32 +292,75 @@ export async function adminGenerateSlots(input: z.infer<typeof generateSlotsSche
 }
 
 // ===== Registrations =====
-export async function adminListRegistrations(filters?: AdminServerFilters) {
+export async function adminListRegistrations(
+  filters?: AdminServerFilters,
+  pagination?: z.infer<typeof adminListPaginationSchema>,
+) {
+  const parsed = adminListFiltersSchema.parse(filters);
+  const { page, pageSize } = adminListPaginationSchema.parse(pagination ?? {});
+  const { supabase } = await adminContext();
+
+  const slotJoin = registrationSlotJoin(parsed);
+  const slotSelect = `${slotJoin}(id, name, capacity, starts_at, ends_at, event_id, events(id, name))`;
+  const baseCols = `id, customer_name, mobile, email, guest_count, status, created_at, qr_token, slot_id`;
+  const emailCols = `pass_email_status, pass_email_sent_at, pass_email_error`;
+
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const runList = (select: string) => {
+    let q = supabase
+      .from("registrations")
+      .select(select, { count: "exact" })
+      .order("created_at", { ascending: false });
+    q = applyRegistrationListFilters(q, parsed);
+    return q.range(from, to);
+  };
+
+  let { data, error, count } = await runList(`${baseCols}, ${emailCols}, ${slotSelect}`);
+
+  // Back-compat: pass_email_* columns may not be migrated yet.
+  if (error && /pass_email_/.test(error.message ?? "")) {
+    ({ data, error, count } = await runList(`${baseCols}, ${slotSelect}`));
+  }
+  if (error) throw new Error(error.message);
+  return { registrations: data ?? [], total: count ?? 0 };
+}
+
+const resendEmailSchema = z.object({ id: z.string().uuid() });
+
+/** Re-send the digital pass email for a registration. Always allowed (even if already sent). */
+export async function adminResendDigitalPassEmail(input: z.infer<typeof resendEmailSchema>) {
+  const data = resendEmailSchema.parse(input);
+  await adminContext();
+  const { resendDigitalPassEmail } = await import("@/lib/mailgun.server");
+  const result = await resendDigitalPassEmail(data.id);
+  if (!result.ok) {
+    throw new Error(result.error || "Failed to send email");
+  }
+  return { ok: true };
+}
+
+/** Lightweight status totals for bookings stat cards (same filters as the table). */
+export async function adminRegistrationBookingStats(filters?: AdminServerFilters) {
   const parsed = adminListFiltersSchema.parse(filters);
   const { supabase } = await adminContext();
 
-  const slotJoin = parsed?.eventId ? "slots!inner" : "slots";
-  const select = `id, customer_name, mobile, email, guest_count, status, created_at, qr_token, slot_id, ${slotJoin}(id, name, capacity, starts_at, ends_at, event_id, events(id, name))`;
+  const slotJoin = registrationSlotJoin(parsed);
+  let query = supabase.from("registrations").select(`status, guest_count, ${slotJoin}(event_id)`);
+  query = applyRegistrationListFilters(query, parsed);
 
-  let query = supabase.from("registrations").select(select).order("created_at", { ascending: false });
-
-  if (parsed?.slotId) query = query.eq("slot_id", parsed.slotId);
-  if (parsed?.status) query = query.eq("status", parsed.status);
-  if (parsed?.dateFrom) query = query.gte("created_at", `${parsed.dateFrom}T00:00:00.000Z`);
-  if (parsed?.dateTo) query = query.lte("created_at", endOfDayIso(parsed.dateTo));
-  if (parsed?.search) {
-    const term = parsed.search.replace(/[%_,]/g, "");
-    if (term) {
-      query = query.or(
-        `customer_name.ilike.%${term}%,mobile.ilike.%${term}%,email.ilike.%${term}%`,
-      );
-    }
-  }
-  if (parsed?.eventId) query = query.eq("slots.event_id", parsed.eventId);
-
-  const { data, error } = await query.limit(2000);
+  const { data, error } = await query.limit(5000);
   if (error) throw new Error(error.message);
-    return { registrations: data ?? [] };
+
+  return {
+    stats: computeBookingStats(
+      (data ?? []).map((row) => ({
+        guest_count: row.guest_count ?? 0,
+        status: row.status as string,
+      })),
+    ),
+  };
 }
 
 const registrationStatusSchema = z.enum([
@@ -417,54 +501,265 @@ export async function adminSaveSettings(input: z.infer<typeof scannerSettingsSch
 }
 
 const mailgunSettingsSchema = z.object({
+  // Driver + shared toggle
+  mail_driver: z.enum(["api", "smtp"]).optional(),
+  mailgun_enabled: z.boolean(),
+  // Mailgun HTTP API fields
   mailgun_api_key: z.string().max(5000).optional().nullable(),
   mailgun_domain: z.string().trim().max(255).optional().nullable(),
   mailgun_from_email: z.string().trim().email().max(255).optional().nullable(),
-  mailgun_enabled: z.boolean(),
+  mailgun_region: z.enum(["us", "eu"]).optional(),
+  // SMTP fields
+  mail_host: z.string().trim().max(255).optional().nullable(),
+  mail_port: z.number().int().min(1).max(65535).optional().nullable(),
+  mail_username: z.string().trim().max(255).optional().nullable(),
+  mail_password: z.string().max(5000).optional().nullable(),
+  mail_encryption: z.enum(["tls", "ssl", "none"]).optional().nullable(),
+  mail_from_email: z.string().trim().email().max(255).optional().nullable(),
+  mail_from_name: z.string().trim().max(120).optional().nullable(),
 });
 
-export async function adminGetMailgunSettings() {
-  const { isMailgunConfiguredFromEnv } = await import("@/lib/mailgun.server");
-  const { supabase } = await adminContext();
-  const { data, error } = await supabase
-    .from("app_settings")
-    .select("mailgun_domain, mailgun_from_email, mailgun_enabled, mailgun_api_key")
-    .eq("id", 1)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
+type MailgunSettingsRow = {
+  mailgun_domain?: string | null;
+  mailgun_from_email?: string | null;
+  mailgun_enabled?: boolean | null;
+  mailgun_api_key?: string | null;
+  mailgun_region?: string | null;
+  mail_driver?: string | null;
+  mail_host?: string | null;
+  mail_port?: number | null;
+  mail_username?: string | null;
+  mail_password?: string | null;
+  mail_encryption?: string | null;
+  mail_from_email?: string | null;
+  mail_from_name?: string | null;
+};
 
+type DbResult = { data: MailgunSettingsRow | null; error: { message?: string } | null };
+
+const MAILGUN_SELECT_FULL =
+  "mailgun_domain, mailgun_from_email, mailgun_enabled, mailgun_api_key, mailgun_region, " +
+  "mail_driver, mail_host, mail_port, mail_username, mail_password, mail_encryption, mail_from_email, mail_from_name";
+
+export async function adminGetMailgunSettings() {
+  const { isMailgunConfiguredFromEnv, resolveMailFromName } = await import("@/lib/mailgun.server");
+  const { supabase } = await adminContext();
+  // These columns may not be in the generated DB types yet; cast through unknown.
+  let res = (await supabase
+    .from("app_settings")
+    .select(MAILGUN_SELECT_FULL)
+    .eq("id", 1)
+    .maybeSingle()) as unknown as DbResult;
+
+  // Back-compat: SMTP (mail_*) migration not applied.
+  if (res.error && /mail_(driver|host|port|username|password|encryption|from)/.test(res.error.message ?? "")) {
+    res = (await supabase
+      .from("app_settings")
+      .select("mailgun_domain, mailgun_from_email, mailgun_enabled, mailgun_api_key, mailgun_region")
+      .eq("id", 1)
+      .maybeSingle()) as unknown as DbResult;
+  }
+  // Back-compat: region migration not applied.
+  if (res.error && /mailgun_region/.test(res.error.message ?? "")) {
+    res = (await supabase
+      .from("app_settings")
+      .select("mailgun_domain, mailgun_from_email, mailgun_enabled, mailgun_api_key")
+      .eq("id", 1)
+      .maybeSingle()) as unknown as DbResult;
+  }
+  if (res.error) throw new Error(res.error.message ?? "Failed to load email settings");
+
+  const data = res.data;
   const hasApiKey = Boolean(data?.mailgun_api_key?.trim());
   const apiKeyFromEnv = isMailgunConfiguredFromEnv() && !hasApiKey;
+  const region = data?.mailgun_region?.trim().toLowerCase() === "eu" ? "eu" : "us";
+  const encRaw = data?.mail_encryption?.trim().toLowerCase();
+  const encryption = encRaw === "ssl" || encRaw === "none" ? encRaw : "tls";
+  const hasMailPassword = Boolean(data?.mail_password?.trim());
+  const storedPasswordLength = data?.mail_password?.length ?? 0;
+  const passwordLooksTruncated = storedPasswordLength > 0 && storedPasswordLength < 32;
+
+  const legacySmtpHost =
+    data?.mailgun_domain?.trim().toLowerCase().startsWith("smtp.") ||
+    data?.mailgun_domain?.trim().toLowerCase() === "smtp.mailgun.org" ||
+    data?.mailgun_domain?.trim().toLowerCase() === "smtp.eu.mailgun.org"
+      ? data.mailgun_domain
+      : null;
+
+  const smtpHost = data?.mail_host ?? legacySmtpHost;
+  const smtpConfigured = Boolean(
+    smtpHost?.trim() &&
+      data?.mail_username?.trim() &&
+      hasMailPassword &&
+      !passwordLooksTruncated &&
+      (data?.mail_from_email?.trim() || data?.mailgun_from_email?.trim()),
+  );
+  const apiDomain = data?.mailgun_domain?.trim();
+  const apiConfigured =
+    (hasApiKey || apiKeyFromEnv) &&
+    Boolean(apiDomain) &&
+    !apiDomain!.toLowerCase().startsWith("smtp.");
+
+  const explicitDriver = data?.mail_driver?.trim().toLowerCase();
+  const driver: "api" | "smtp" =
+    explicitDriver === "smtp" || explicitDriver === "api"
+      ? explicitDriver
+      : smtpConfigured
+        ? "smtp"
+        : "api";
 
   return {
     settings: {
-      mailgun_domain: data?.mailgun_domain ?? null,
-      mailgun_from_email: data?.mailgun_from_email ?? null,
+      mail_driver: driver,
       mailgun_enabled: !!data?.mailgun_enabled,
+      mailgun_domain: legacySmtpHost ? null : data?.mailgun_domain ?? null,
+      mailgun_from_email: data?.mailgun_from_email ?? null,
+      mailgun_region: region as "us" | "eu",
+      mail_host: smtpHost ?? null,
+      mail_port: data?.mail_port ?? null,
+      mail_username:
+        data?.mail_username ??
+        (driver === "smtp" && !data?.mail_host ? data?.mailgun_from_email : null) ??
+        null,
+      mail_encryption: encryption as "tls" | "ssl" | "none",
+      mail_from_email: data?.mail_from_email ?? null,
+      mail_from_name: resolveMailFromName(data?.mail_from_name),
     },
     hasApiKey,
     apiKeyConfigured: hasApiKey || apiKeyFromEnv,
     apiKeyFromEnv,
+    hasMailPassword: hasMailPassword || (driver === "api" && hasApiKey),
+    storedPasswordLength,
+    passwordLooksTruncated,
+    configured: driver === "smtp" ? smtpConfigured : apiConfigured,
   };
+}
+
+export async function adminTestSmtpConnection() {
+  await adminContext();
+  const { verifySmtpConnection } = await import("@/lib/mailgun.server");
+  const result = await verifySmtpConnection();
+  if (!result.ok) throw new Error(result.error || "SMTP connection failed");
+  return { ok: true as const };
 }
 
 export async function adminSaveMailgunSettings(input: z.infer<typeof mailgunSettingsSchema>) {
   const data = mailgunSettingsSchema.parse(input);
   const { supabase } = await adminContext();
-  const { error } = await supabase
+  const driver = data.mail_driver ?? "api";
+
+  if (driver === "smtp" && !data.mail_password?.trim()) {
+    const { data: current } = (await supabase
+      .from("app_settings")
+      .select("mail_password")
+      .eq("id", 1)
+      .maybeSingle()) as { data: { mail_password?: string | null } | null };
+    const len = current?.mail_password?.length ?? 0;
+    if (len > 0 && len < 32) {
+      throw new Error(
+        `Stored SMTP password is only ${len} characters (likely truncated). Paste the full Mailgun SMTP password from Domain → SMTP credentials and save again.`,
+      );
+    }
+  }
+
+  const smtpFields: Record<string, unknown> = {
+    mail_driver: driver,
+    ...(data.mail_host !== undefined ? { mail_host: data.mail_host?.trim() || null } : {}),
+    ...(data.mail_port !== undefined ? { mail_port: data.mail_port ?? null } : {}),
+    ...(data.mail_username !== undefined
+      ? { mail_username: data.mail_username?.trim() || null }
+      : {}),
+    ...(data.mail_password?.trim() ? { mail_password: data.mail_password.trim() } : {}),
+    ...(data.mail_encryption !== undefined ? { mail_encryption: data.mail_encryption ?? null } : {}),
+    ...(data.mail_from_email !== undefined
+      ? { mail_from_email: data.mail_from_email?.trim() || null }
+      : {}),
+    ...(data.mail_from_name !== undefined
+      ? { mail_from_name: data.mail_from_name?.trim() || null }
+      : {}),
+  };
+
+  const apiFields: Record<string, unknown> = {
+    ...(data.mailgun_domain !== undefined
+      ? { mailgun_domain: data.mailgun_domain?.trim() || null }
+      : {}),
+    ...(data.mailgun_from_email !== undefined
+      ? { mailgun_from_email: data.mailgun_from_email?.trim() || null }
+      : {}),
+    ...(data.mailgun_region ? { mailgun_region: data.mailgun_region } : {}),
+    ...(data.mailgun_api_key !== undefined
+      ? { mailgun_api_key: data.mailgun_api_key?.trim() || null }
+      : {}),
+  };
+
+  // Driver-aware: only persist fields for the active driver (+ shared toggle).
+  const update: Record<string, unknown> = {
+    mailgun_enabled: data.mailgun_enabled,
+    updated_at: new Date().toISOString(),
+    ...(driver === "smtp" ? smtpFields : apiFields),
+  };
+
+  // When switching to SMTP, clear stale API fields that may hold truncated passwords.
+  if (driver === "smtp") {
+    update.mailgun_domain = null;
+    update.mailgun_api_key = null;
+  }
+
+  let { error } = await supabase
     .from("app_settings")
-    .update({
-      mailgun_domain: data.mailgun_domain?.trim() || null,
-      mailgun_from_email: data.mailgun_from_email?.trim() || null,
-      mailgun_enabled: data.mailgun_enabled,
-      ...(data.mailgun_api_key !== undefined
-        ? { mailgun_api_key: data.mailgun_api_key?.trim() || null }
-        : {}),
-      updated_at: new Date().toISOString(),
-    })
+    .update(update as never)
     .eq("id", 1);
+
+  let smtpMigrationRequired = false;
+
+  // Back-compat: SMTP columns missing — map essentials into mailgun_* for send path.
+  if (error && /mail_(driver|host|port|username|password|encryption|from)/.test(error.message ?? "")) {
+    if (driver === "smtp") {
+      smtpMigrationRequired = true;
+      const legacyUpdate: Record<string, unknown> = {
+        mailgun_enabled: data.mailgun_enabled,
+        updated_at: new Date().toISOString(),
+        mailgun_domain: data.mail_host?.trim() || null,
+        mailgun_from_email:
+          data.mail_username?.trim() || data.mail_from_email?.trim() || null,
+        ...(data.mail_password?.trim()
+          ? { mailgun_api_key: data.mail_password.trim() }
+          : {}),
+      };
+      ({ error } = await supabase
+        .from("app_settings")
+        .update(legacyUpdate as never)
+        .eq("id", 1));
+    } else {
+      const stripped = { ...update };
+      for (const key of Object.keys(smtpFields)) delete stripped[key];
+      ({ error } = await supabase
+        .from("app_settings")
+        .update(stripped as never)
+        .eq("id", 1));
+    }
+  }
+
+  // Back-compat: region column missing.
+  if (error && /mailgun_region/.test(error.message ?? "")) {
+    const stripped = { ...update };
+    delete stripped.mailgun_region;
+    for (const key of Object.keys(smtpFields)) delete stripped[key];
+    ({ error } = await supabase
+      .from("app_settings")
+      .update(stripped as never)
+      .eq("id", 1));
+  }
+
   if (error) throw new Error(error.message);
-  return { ok: true };
+
+  return {
+    ok: true as const,
+    smtpMigrationRequired,
+    warning: smtpMigrationRequired
+      ? "SMTP columns are not in the database yet — settings were saved using a legacy layout. Apply migration 20260529140000_app_settings_smtp.sql (supabase db push) for full SMTP support including separate sender email."
+      : undefined,
+  };
 }
 
 const supabaseEnvSaveSchema = z.object({
@@ -686,8 +981,9 @@ export async function adminReports(filters?: AdminServerFilters) {
   if (parsed?.eventId) regQuery = regQuery.eq("slots.event_id", parsed.eventId);
   if (parsed?.slotId) regQuery = regQuery.eq("slot_id", parsed.slotId);
   if (parsed?.status) regQuery = regQuery.eq("status", parsed.status);
-  if (parsed?.dateFrom) regQuery = regQuery.gte("created_at", `${parsed.dateFrom}T00:00:00.000Z`);
-  if (parsed?.dateTo) regQuery = regQuery.lte("created_at", endOfDayIso(parsed.dateTo));
+  const regRange = localCalendarRangeBoundsIso(parsed?.dateFrom, parsed?.dateTo);
+  if (regRange.startIso) regQuery = regQuery.gte("created_at", regRange.startIso);
+  if (regRange.endIso) regQuery = regQuery.lt("created_at", regRange.endIso);
   if (parsed?.search) {
     const term = parsed.search.replace(/[%_,]/g, "");
     if (term) {
@@ -695,18 +991,33 @@ export async function adminReports(filters?: AdminServerFilters) {
     }
   }
 
-  let scanQuery = supabase.from("scan_events").select("mode, result, scanned_at, slot_id, slots(event_id)");
+  const scanSlotJoin = parsed?.eventId ? "slots!inner" : "slots";
+  const scanSelect = `id, mode, result, scanned_at, slot_id, registration_id, ${scanSlotJoin}(name, event_id, events(name)), registrations(customer_name, status)`;
+  const scanRange = localCalendarRangeBoundsIso(parsed?.dateFrom, parsed?.dateTo);
 
-  if (parsed?.eventId || parsed?.slotId) {
-    if (parsed.slotId) scanQuery = scanQuery.eq("slot_id", parsed.slotId);
-    else if (parsed.eventId) scanQuery = scanQuery.eq("slots.event_id", parsed.eventId);
-  }
-  if (parsed?.dateFrom) scanQuery = scanQuery.gte("scanned_at", `${parsed.dateFrom}T00:00:00.000Z`);
-  if (parsed?.dateTo) scanQuery = scanQuery.lte("scanned_at", endOfDayIso(parsed.dateTo));
+  let scanQuery = supabase.from("scan_events").select(scanSelect);
+  let recentScanQuery = supabase
+    .from("scan_events")
+    .select(scanSelect)
+    .order("scanned_at", { ascending: false })
+    .limit(25);
 
-  const [regs, scans] = await Promise.all([regQuery, scanQuery]);
+  const applyScanFilters = <T extends typeof scanQuery>(query: T) => {
+    let q = query;
+    if (parsed?.slotId) q = q.eq("slot_id", parsed.slotId);
+    else if (parsed?.eventId) q = q.eq("slots.event_id", parsed.eventId);
+    if (scanRange.startIso) q = q.gte("scanned_at", scanRange.startIso);
+    if (scanRange.endIso) q = q.lt("scanned_at", scanRange.endIso);
+    return q;
+  };
+
+  scanQuery = applyScanFilters(scanQuery);
+  recentScanQuery = applyScanFilters(recentScanQuery);
+
+  const [regs, scans, recentScansRes] = await Promise.all([regQuery, scanQuery, recentScanQuery]);
   if (regs.error) throw new Error(regs.error.message);
   if (scans.error) throw new Error(scans.error.message);
+  if (recentScansRes.error) throw new Error(recentScansRes.error.message);
 
   type RegRow = {
     status: string;
@@ -716,11 +1027,20 @@ export async function adminReports(filters?: AdminServerFilters) {
     slots?: { name?: string; event_id?: string } | { name?: string; event_id?: string }[] | null;
   };
   type ScanRow = {
+    id?: string;
     mode: string;
     result: string;
     scanned_at: string;
     slot_id: string | null;
-    slots?: { event_id?: string } | { event_id?: string }[] | null;
+    registration_id: string | null;
+    slots?:
+      | { name?: string; event_id?: string; events?: { name?: string } | { name?: string }[] | null }
+      | { name?: string; event_id?: string; events?: { name?: string } | { name?: string }[] | null }[]
+      | null;
+    registrations?:
+      | { customer_name?: string | null; status: string }
+      | { customer_name?: string | null; status: string }[]
+      | null;
   };
 
   const regRows = (regs.data ?? []) as RegRow[];
@@ -731,7 +1051,7 @@ export async function adminReports(filters?: AdminServerFilters) {
   const guestsBySlotMap = new Map<string, { slotName: string; registrations: number; guests: number }>();
 
   regRows.forEach((r) => {
-    byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
+    byStatus[r.status] = (byStatus[r.status] ?? 0) + (r.guest_count ?? 1);
     const day = r.created_at.slice(0, 10);
     const dayRow = registrationsByDayMap.get(day) ?? { registrations: 0, guests: 0 };
     dayRow.registrations += 1;
@@ -750,23 +1070,60 @@ export async function adminReports(filters?: AdminServerFilters) {
     guestsBySlotMap.set(r.slot_id, slotRow);
   });
 
-  const scanRows = (scans.data ?? []) as ScanRow[];
+  const scanRows = (scans.data ?? []) as unknown as ScanRow[];
   const totalScans = scanRows.length;
   const validScans = scanRows.filter((s) => s.result === "valid").length;
-    const invalidScans = totalScans - validScans;
+  const invalidScans = countActionableInvalidScans(scanRows);
   const scansByResult: Record<string, number> = {};
   const scansByMode: Record<string, number> = {};
-  const scansByDayMap = new Map<string, { total: number; valid: number; invalid: number }>();
+  const scansByDayMap = new Map<
+    string,
+    { total: number; valid: number; invalid: number; checkins: number }
+  >();
 
   scanRows.forEach((s) => {
     scansByResult[s.result] = (scansByResult[s.result] ?? 0) + 1;
     scansByMode[s.mode] = (scansByMode[s.mode] ?? 0) + 1;
-    const day = s.scanned_at.slice(0, 10);
-    const dayRow = scansByDayMap.get(day) ?? { total: 0, valid: 0, invalid: 0 };
+    const day = formatYmd(new Date(s.scanned_at));
+    const dayRow = scansByDayMap.get(day) ?? { total: 0, valid: 0, invalid: 0, checkins: 0 };
     dayRow.total += 1;
     if (s.result === "valid") dayRow.valid += 1;
-    else dayRow.invalid += 1;
+    else if (isActionableInvalidScan(s, registrationStatusFromScanRow(s))) dayRow.invalid += 1;
+    if (isValidEntryCheckin(s)) dayRow.checkins += 1;
     scansByDayMap.set(day, dayRow);
+  });
+
+  const recentScanActivity = ((recentScansRes.data ?? []) as unknown as ScanRow[]).flatMap((row) => {
+    const slotRel = Array.isArray(row.slots) ? row.slots[0] : row.slots;
+    if (!slotRel?.name) return [];
+    const regRel = Array.isArray(row.registrations) ? row.registrations[0] : row.registrations;
+    const eventRel = slotRel.events;
+    const eventName = Array.isArray(eventRel) ? eventRel[0]?.name : eventRel?.name;
+    const regStatus = regRel?.status;
+    const checkedIn =
+      isValidEntryCheckin(row) || regStatus === "entered" || regStatus === "exited";
+    let timeLabel: string;
+    try {
+      timeLabel = new Date(row.scanned_at).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+    } catch {
+      timeLabel = row.scanned_at;
+    }
+    return [
+      {
+        id: row.id ?? `${row.scanned_at}-${row.slot_id}`,
+        name: regRel?.customer_name?.trim() || "Guest",
+        event: eventName ?? "—",
+        slot: slotRel.name,
+        status: checkedIn ? ("checked_in" as const) : ("pending" as const),
+        time: timeLabel,
+      },
+    ];
   });
 
   let slotQuery = supabase.from("slots").select("id, name, capacity, event_id");
@@ -807,6 +1164,8 @@ export async function adminReports(filters?: AdminServerFilters) {
       .map(([date, v]) => ({ date, ...v })),
     capacityBySlot: capacityBySlot.sort((a, b) => b.utilizationPct - a.utilizationPct),
     heatmapRegistrations: regRows.map((r) => ({ created_at: r.created_at })),
+    recentScanActivity,
+    validEntryScans: scanRows.filter((s) => isValidEntryCheckin(s)).length,
   };
 }
 
@@ -882,10 +1241,10 @@ function sanitizeBookingQubeSettingsForClient<T extends { api_key?: string | nul
 /** Single auth round-trip for settings sidebar status (avoids 3× parallel getUser). */
 export async function adminGetSettingsSidebarStatus() {
   const { resolveBookingQubeApiKey } = await import("@/lib/bookingqube.sync");
-  const { isMailgunConfiguredFromEnv } = await import("@/lib/mailgun.server");
+  const { resolveMailConfig } = await import("@/lib/mailgun.server");
   const { supabase } = await adminContext();
 
-  const [appRes, bqSettingsRes, bqMappingsRes, mailgunRes] = await Promise.all([
+  const [appRes, bqSettingsRes, bqMappingsRes, mailgunRes, mailConfig] = await Promise.all([
     supabase.from("app_settings").select("scandit_enabled").eq("id", 1).maybeSingle(),
     supabase
       .from("integration_settings")
@@ -898,9 +1257,10 @@ export async function adminGetSettingsSidebarStatus() {
       .eq("provider", BOOKINGQUBE_PROVIDER),
     supabase
       .from("app_settings")
-      .select("mailgun_enabled, mailgun_api_key")
+      .select("mailgun_enabled")
       .eq("id", 1)
       .maybeSingle(),
+    resolveMailConfig(),
   ]);
 
   const bqSettings = bqSettingsRes.error && isBookingQubeIntegrationTableError(bqSettingsRes.error)
@@ -926,10 +1286,7 @@ export async function adminGetSettingsSidebarStatus() {
     hasEventMapping;
 
   const mailgunRow = mailgunRes.data;
-  const hasMailgunApiKey = Boolean(mailgunRow?.mailgun_api_key?.trim());
-  const mailgunApiKeyFromEnv = isMailgunConfiguredFromEnv() && !hasMailgunApiKey;
-  const mailgunOk =
-    Boolean(mailgunRow?.mailgun_enabled) && (hasMailgunApiKey || mailgunApiKeyFromEnv);
+  const mailgunOk = mailConfig !== null;
 
   return {
     scannerOk: Boolean(appRes.data?.scandit_enabled),

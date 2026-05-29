@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useAuth, type AppRole } from "@/hooks/use-auth";
 import { userHasRoleAccess } from "@/lib/staff-auth";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,8 @@ export function RoleGuard({
   bare,
 }: {
   role: AppRole;
-  loginPath?: string;  children: React.ReactNode;
+  loginPath?: string;
+  children: React.ReactNode;
   nav?: React.ReactNode;
   /** When true, render children without the default header chrome — the route brings its own. */
   bare?: boolean;
@@ -27,6 +28,13 @@ export function RoleGuard({
   const router = useRouter();
   const pathname = usePathname();
   const allowed = useMemo(() => userHasRoleAccess(roles, role), [roles, role]);
+  const accessGranted = Boolean(session && allowed && rolesLoaded);
+  const wasGrantedRef = useRef(false);
+  if (accessGranted) wasGrantedRef.current = true;
+
+  useEffect(() => {
+    if (!session) wasGrantedRef.current = false;
+  }, [session]);
 
   useEffect(() => {
     if (loading || !rolesLoaded) return;
@@ -34,8 +42,23 @@ export function RoleGuard({
     else if (!allowed) router.push(loginPath);
   }, [loading, rolesLoaded, session, allowed, role, loginPath, router, pathname]);
 
-  if (loading || !rolesLoaded || !session || !allowed) {
-    return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Checking access…</div>;
+  const showInitialGate = !wasGrantedRef.current && (loading || !rolesLoaded || !session || !allowed);
+  const showStickyContent = wasGrantedRef.current && session && allowed;
+
+  if (showInitialGate) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
+        Checking access…
+      </div>
+    );
+  }
+
+  if (!showStickyContent && (!session || !allowed)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
+        Checking access…
+      </div>
+    );
   }
 
   if (bare) return <>{children}</>;
@@ -47,7 +70,14 @@ export function RoleGuard({
           <SummerSplashLogo href="/" size="sm" />
           <div className="flex items-center gap-2">
             {nav}
-            <Button variant="ghost" size="sm" onClick={async () => { await signOut(); router.push(loginPath); }}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                await signOut();
+                router.push(loginPath);
+              }}
+            >
               <LogOut className="mr-1 h-4 w-4" /> Sign out
             </Button>
           </div>

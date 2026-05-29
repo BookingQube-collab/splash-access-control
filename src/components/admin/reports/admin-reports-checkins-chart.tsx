@@ -19,7 +19,7 @@ import {
   type AdminReportsData,
 } from "@/components/admin/admin-reports-utils";
 
-const config = { total: { label: "Check-ins", color: "#7c3aed" } } satisfies ChartConfig;
+const config = { checkins: { label: "Check-ins", color: "#7c3aed" } } satisfies ChartConfig;
 
 export function AdminReportsCheckinsChart({
   scansByDay,
@@ -27,10 +27,21 @@ export function AdminReportsCheckinsChart({
   scansByDay: AdminReportsData["scansByDay"];
 }) {
   const chartData = useMemo(() => sliceLastNDays(scansByDay, 7), [scansByDay]);
-  const stats = useMemo(() => computeDayTrendStats(chartData, "total"), [chartData]);
-  const totalCheckins = useMemo(
-    () => chartData.reduce((s, d) => s + d.total, 0),
+  const chartDataWithCheckins = useMemo(
+    () => chartData.map((d) => ({ ...d, checkins: d.checkins ?? 0 })),
     [chartData],
+  );
+  const stats = useMemo(
+    () =>
+      computeDayTrendStats(
+        chartDataWithCheckins.map((d) => ({ date: d.date, total: d.checkins })),
+        "total",
+      ),
+    [chartDataWithCheckins],
+  );
+  const totalCheckins = useMemo(
+    () => chartDataWithCheckins.reduce((s, d) => s + d.checkins, 0),
+    [chartDataWithCheckins],
   );
 
   return (
@@ -40,7 +51,7 @@ export function AdminReportsCheckinsChart({
       ) : (
         <>
           <ChartContainer config={config} className="h-[220px] w-full">
-            <LineChart data={chartData} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
+            <LineChart data={chartDataWithCheckins} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
               <XAxis
                 dataKey="date"
@@ -53,8 +64,8 @@ export function AdminReportsCheckinsChart({
               <ChartTooltip content={<ChartTooltipContent />} />
               <Line
                 type="monotone"
-                dataKey="total"
-                stroke="var(--color-total)"
+                dataKey="checkins"
+                stroke="var(--color-checkins)"
                 strokeWidth={2.5}
                 dot={{ r: 3, fill: "#7c3aed", strokeWidth: 0 }}
               />

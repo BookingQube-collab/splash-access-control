@@ -57,9 +57,50 @@ export const ADMIN_TAB_KEYS: AdminTabKey[] = [
   "settings",
 ];
 
+const ADMIN_TAB_STORAGE_KEY = "splash-admin-tab";
+
 export function parseAdminTabParam(value: string | null | undefined): AdminTabKey {
   if (value && ADMIN_TAB_KEYS.includes(value as AdminTabKey)) return value as AdminTabKey;
   return "overview";
+}
+
+export function readStoredAdminTab(): AdminTabKey | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = sessionStorage.getItem(ADMIN_TAB_STORAGE_KEY);
+    if (stored && ADMIN_TAB_KEYS.includes(stored as AdminTabKey)) return stored as AdminTabKey;
+  } catch {
+    /* private mode / blocked storage */
+  }
+  return null;
+}
+
+export function persistAdminTab(tab: AdminTabKey) {
+  if (typeof window === "undefined") return;
+  try {
+    if (tab === "overview") sessionStorage.removeItem(ADMIN_TAB_STORAGE_KEY);
+    else sessionStorage.setItem(ADMIN_TAB_STORAGE_KEY, tab);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function adminTabFromSearchParams(
+  searchParams: Pick<URLSearchParams, "get">,
+): AdminTabKey {
+  const fromUrl = searchParams.get("tab");
+  if (fromUrl) return parseAdminTabParam(fromUrl);
+  return readStoredAdminTab() ?? "overview";
+}
+
+export function buildAdminHref(tab: AdminTabKey, extra?: Record<string, string>) {
+  const params = new URLSearchParams();
+  if (tab !== "overview") params.set("tab", tab);
+  for (const [key, value] of Object.entries(extra ?? {})) {
+    if (value) params.set(key, value);
+  }
+  const qs = params.toString();
+  return qs ? `/admin?${qs}` : "/admin";
 }
 
 const NAV: { key: AdminTabKey; label: string; icon: React.ReactNode }[] = [
@@ -128,7 +169,7 @@ export function AdminShell({
       handleTabChange("overview");
       if (pathname === "/admin") {
         e.preventDefault();
-        router.replace("/admin?scroll=schedule", { scroll: false });
+        router.replace(buildAdminHref("overview", { scroll: "schedule" }), { scroll: false });
       }
     },
     [handleTabChange, pathname, router],
@@ -138,6 +179,8 @@ export function AdminShell({
     await supabase.auth.signOut();
     window.location.href = "/";
   };
+
+  const adminHomeHref = buildAdminHref(tab);
 
   const navButton = (n: (typeof NAV)[number]) => {
     const active = tab === n.key;
@@ -240,7 +283,7 @@ export function AdminShell({
               >
                 <Menu className="h-5 w-5" />
               </button>
-              <Link href="/admin" className="flex items-center" onClick={() => handleTabChange("overview")}>
+              <Link href={adminHomeHref} className="flex items-center">
                 <SummerSplashLogo size="sm" />
               </Link>
             </div>
@@ -260,7 +303,7 @@ export function AdminShell({
                 </button>
               ) : (
                 <Link
-                  href="/admin?scroll=schedule"
+                  href={buildAdminHref("overview", { scroll: "schedule" })}
                   onClick={goToLiveSchedule}
                   className="inline-flex items-center gap-2 rounded-full border border-[#99f6e4] bg-white px-3.5 py-1.5 text-xs font-semibold text-[#0f766e] shadow-sm transition hover:bg-[#f0fdfa]"
                 >

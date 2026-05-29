@@ -3,13 +3,32 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { AuthChangeEvent } from "@supabase/supabase-js";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { isSupabaseConfigured, SupabaseConfigRequired } from "@/components/supabase-config-required";
 import { ThemeClassSync } from "@/components/theme-class-sync";
+import { AuthProvider } from "@/hooks/use-auth";
+
+/** Auth events that should refresh server components and invalidate client queries. */
+const SESSION_MUTATING_EVENTS = new Set<AuthChangeEvent>([
+  "SIGNED_IN",
+  "SIGNED_OUT",
+  "USER_UPDATED",
+]);
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 30_000,
+            refetchOnWindowFocus: false,
+          },
+        },
+      }),
+  );
   const router = useRouter();
   const configured = isSupabaseConfigured();
 
@@ -17,9 +36,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
     if (!configured) return;
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (!SESSION_MUTATING_EVENTS.has(event)) return;
       router.refresh();
-      queryClient.invalidateQueries();
+      void queryClient.invalidateQueries();
     });
     return () => subscription.unsubscribe();
   }, [configured, queryClient, router]);
@@ -30,9 +50,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeClassSync />
-      {children}
-      <Toaster richColors position="top-right" />
+      <AuthProvider>
+        <ThemeClassSync />
+        {children}
+        <Toaster richColors position="top-right" />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

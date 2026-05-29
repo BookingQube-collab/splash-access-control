@@ -83,7 +83,7 @@ export function AdminReportsSection({
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <AdminReportsScanTable rows={[]} />
+          <AdminReportsScanTable rows={data.recentScanActivity ?? []} />
         </div>
         <AdminReportsScanDonut
           validScans={data.validScans}
