@@ -1,11 +1,36 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { BeachBg } from "@/components/beach-bg";
-import { HomeBookingSection } from "@/components/public/home-booking-section";
-import { HomeDigitalPassSteps } from "@/components/public/home-digital-pass-steps";
-import { HomeFeatureStrip } from "@/components/public/home-feature-strip";
 import { HomeHero } from "@/components/public/home-hero";
 import { PublicFooter } from "@/components/public/public-footer";
+
+function HomeSectionSkeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={`mx-auto max-w-4xl animate-pulse rounded-3xl bg-white/50 px-6 py-16 ${className ?? ""}`}
+      aria-hidden
+    />
+  );
+}
+
+const HomeFeatureStrip = dynamic(
+  () => import("@/components/public/home-feature-strip").then((m) => ({ default: m.HomeFeatureStrip })),
+  { loading: () => <HomeSectionSkeleton className="my-8 min-h-[120px]" /> },
+);
+
+const HomeBookingSection = dynamic(
+  () => import("@/components/public/home-booking-section").then((m) => ({ default: m.HomeBookingSection })),
+  { loading: () => <HomeSectionSkeleton className="my-8 min-h-[280px]" /> },
+);
+
+const HomeDigitalPassSteps = dynamic(
+  () =>
+    import("@/components/public/home-digital-pass-steps").then((m) => ({
+      default: m.HomeDigitalPassSteps,
+    })),
+  { loading: () => <HomeSectionSkeleton className="my-8 min-h-[200px]" /> },
+);
 
 export default function IndexPage() {
   return (

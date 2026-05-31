@@ -1,10 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AuthChangeEvent } from "@supabase/supabase-js";
-import { Toaster } from "@/components/ui/sonner";
+
+const Toaster = dynamic(
+  () => import("@/components/ui/sonner").then((m) => ({ default: m.Toaster })),
+  { ssr: false },
+);
 import { supabase } from "@/integrations/supabase/client";
 import { isSupabaseConfigured, SupabaseConfigRequired } from "@/components/supabase-config-required";
 import { ThemeClassSync } from "@/components/theme-class-sync";

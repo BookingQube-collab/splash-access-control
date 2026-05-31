@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -19,14 +20,6 @@ import { formatActionError, phoneDigits } from "@/lib/utils";
 import { todayYmd } from "@/lib/utils";
 import { CustomerLogin } from "@/components/customer-app/customer-login";
 import { CustomerOverviewTab } from "@/components/customer-app/customer-overview-tab";
-import { CustomerCalendarTab } from "@/components/customer-app/customer-calendar-tab";
-import { CustomerTimelineTab } from "@/components/customer-app/customer-timeline-tab";
-import {
-  CustomerAllPassesPanel,
-  CustomerPassesListTab,
-} from "@/components/customer-app/customer-passes-list-tab";
-import { CustomerProfileTab } from "@/components/customer-app/customer-profile-tab";
-import { CustomerPassDetail } from "@/components/customer-app/customer-pass-detail";
 import type { AppTab, CustomerPass } from "@/components/customer-app/types";
 import { PHONE_STORAGE_KEY } from "@/components/customer-app/types";
 import {
@@ -48,6 +41,63 @@ const TABS: { key: AppTab; label: string; icon: ReactNode }[] = [
 ];
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function TabPanelSkeleton() {
+  return (
+    <div className="space-y-3 px-4 py-6 sm:px-5">
+      <div className="h-28 animate-pulse rounded-[20px] bg-white/80" />
+      <div className="h-20 animate-pulse rounded-[20px] bg-white/60" />
+    </div>
+  );
+}
+
+const CustomerCalendarTab = dynamic(
+  () =>
+    import("@/components/customer-app/customer-calendar-tab").then((m) => ({
+      default: m.CustomerCalendarTab,
+    })),
+  { loading: TabPanelSkeleton },
+);
+
+const CustomerTimelineTab = dynamic(
+  () =>
+    import("@/components/customer-app/customer-timeline-tab").then((m) => ({
+      default: m.CustomerTimelineTab,
+    })),
+  { loading: TabPanelSkeleton },
+);
+
+const CustomerPassesListTab = dynamic(
+  () =>
+    import("@/components/customer-app/customer-passes-list-tab").then((m) => ({
+      default: m.CustomerPassesListTab,
+    })),
+  { loading: TabPanelSkeleton },
+);
+
+const CustomerProfileTab = dynamic(
+  () =>
+    import("@/components/customer-app/customer-profile-tab").then((m) => ({
+      default: m.CustomerProfileTab,
+    })),
+  { loading: TabPanelSkeleton },
+);
+
+const CustomerPassDetail = dynamic(
+  () =>
+    import("@/components/customer-app/customer-pass-detail").then((m) => ({
+      default: m.CustomerPassDetail,
+    })),
+  { loading: () => <TabPanelSkeleton /> },
+);
+
+const CustomerAllPassesPanel = dynamic(
+  () =>
+    import("@/components/customer-app/customer-passes-list-tab").then((m) => ({
+      default: m.CustomerAllPassesPanel,
+    })),
+  { loading: () => <TabPanelSkeleton /> },
+);
 
 export default function MyPassesPage({ routePassId = "" }: { routePassId?: string }) {
   const router = useRouter();

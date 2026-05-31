@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, XCircle } from "lucide-react";
-import { Html5Qrcode } from "html5-qrcode";
 import { RoleGuard } from "@/components/role-guard";
+import { canAccessScannerModule } from "@/lib/staff-auth";
 import { ScannerPageShell } from "@/components/scanner/scanner-page-shell";
 import { ScannerSiteHeader } from "@/components/scanner/scanner-site-header";
 import { ScannerRecentPanel } from "@/components/scanner/scanner-recent-panel";
@@ -25,6 +25,7 @@ import type {
   ScannerTodaySlot,
   SlotRegistrationItem,
 } from "@/components/scanner/scanner-types";
+import type { Html5Qrcode } from "html5-qrcode";
 import { createScanditScanner, type ScanditScannerHandle } from "@/lib/scandit/scanner-runtime";
 import {
   getRegistrationsForSlotDay,
@@ -81,7 +82,7 @@ function metaFromSlot(slot: ScannerTodaySlot): ActiveSlotMeta {
 
 export default function ScannerPage() {
   return (
-    <RoleGuard role="scanner" bare>
+    <RoleGuard checkAccess={canAccessScannerModule} bare>
       <Scanner />
     </RoleGuard>
   );
@@ -270,6 +271,7 @@ function Scanner() {
   };
 
   const startHtml5Camera = async (container: HTMLElement) => {
+    const { Html5Qrcode } = await import("html5-qrcode");
     const { width, height } = container.getBoundingClientRect();
     const aspectRatio = width > 0 && height > 0 ? width / height : 4 / 3;
     const q = new Html5Qrcode(container.id);

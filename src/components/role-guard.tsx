@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef } from "react";
 import { useAuth, type AppRole } from "@/hooks/use-auth";
@@ -10,24 +9,32 @@ import { LogOut } from "lucide-react";
 import { SummerSplashLogo } from "@/components/brand/summer-splash-logo";
 import { UNIFIED_LOGIN_PATH } from "@/lib/staff-auth";
 
-export function RoleGuard({
-  role,
-  loginPath = UNIFIED_LOGIN_PATH,
-  children,
-  nav,
-  bare,
-}: {
-  role: AppRole;
+type RoleGuardProps = {
   loginPath?: string;
   children: React.ReactNode;
   nav?: React.ReactNode;
   /** When true, render children without the default header chrome — the route brings its own. */
   bare?: boolean;
-}) {
+} & (
+  | { role: AppRole; checkAccess?: never }
+  | { role?: never; checkAccess: (roles: AppRole[]) => boolean }
+);
+
+export function RoleGuard({
+  role,
+  checkAccess,
+  loginPath = UNIFIED_LOGIN_PATH,
+  children,
+  nav,
+  bare,
+}: RoleGuardProps) {
   const { loading, rolesLoaded, session, roles, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const allowed = useMemo(() => userHasRoleAccess(roles, role), [roles, role]);
+  const allowed = useMemo(
+    () => (checkAccess ? checkAccess(roles) : userHasRoleAccess(roles, role)),
+    [roles, role, checkAccess],
+  );
   const accessGranted = Boolean(session && allowed && rolesLoaded);
   const wasGrantedRef = useRef(false);
   if (accessGranted) wasGrantedRef.current = true;

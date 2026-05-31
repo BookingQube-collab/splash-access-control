@@ -22,6 +22,21 @@ export function userHasRoleAccess(roles: AppRole[], required: AppRole): boolean 
   return roles.includes(required) || roles.includes("admin");
 }
 
+/** POS counter module — POS agents and admins only (not scanner-only accounts). */
+export function canAccessPosModule(roles: AppRole[]): boolean {
+  return roles.includes("pos") || roles.includes("admin");
+}
+
+/** Gate scanner module — dedicated scanner, POS agents, and admins. */
+export function canAccessScannerModule(roles: AppRole[]): boolean {
+  return roles.includes("scanner") || roles.includes("pos") || roles.includes("admin");
+}
+
+/** Toggle between POS and Scanner — POS agents and admins only. */
+export function canSwitchPosScanner(roles: AppRole[]): boolean {
+  return roles.includes("pos") || roles.includes("admin");
+}
+
 export function resolveStaffRedirect(roles: AppRole[]): string | null {
   for (const role of ROLE_PRIORITY) {
     if (roles.includes(role)) return ROLE_HOME[role];

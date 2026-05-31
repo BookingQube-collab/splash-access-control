@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { LogOut, User } from "lucide-react";
 import { SummerSplashLogo } from "@/components/brand/summer-splash-logo";
+import { PosScannerModeSwitch } from "@/components/staff/pos-scanner-mode-switch";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +30,9 @@ export function ScannerSiteHeader({ className }: { className?: string }) {
             </h1>
           </div>
         </div>
-        <button
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <PosScannerModeSwitch compact />
+          <button
           type="button"
           onClick={async () => {
             await signOut();
@@ -43,6 +46,7 @@ export function ScannerSiteHeader({ className }: { className?: string }) {
           <span className="hidden sm:inline">Sign out</span>
           <LogOut className="h-3.5 w-3.5 text-[#6b7280]" strokeWidth={2} />
         </button>
+        </div>
       </div>
     </header>
   );

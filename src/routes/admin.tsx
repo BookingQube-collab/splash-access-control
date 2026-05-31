@@ -11,7 +11,6 @@ import {
   persistAdminTab,
   type AdminTabKey,
 } from "@/components/admin/admin-shell";
-import { AdminOverviewSection } from "@/components/admin/admin-overview-section";
 import { ADMIN_CARD } from "@/components/admin/admin-theme";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +21,14 @@ function AdminTabLoading() {
     </div>
   );
 }
+
+const AdminOverviewSection = dynamic(
+  () =>
+    import("@/components/admin/admin-overview-section").then((m) => ({
+      default: m.AdminOverviewSection,
+    })),
+  { loading: AdminTabLoading },
+);
 
 const AdminBookingsSection = dynamic(
   () =>

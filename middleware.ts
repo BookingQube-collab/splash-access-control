@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import {
+  canAccessPosModule,
+  canAccessScannerModule,
   resolveStaffRedirect,
   UNIFIED_LOGIN_PATH,
   userHasRoleAccess,
@@ -23,6 +25,12 @@ function matchStaffRoute(pathname: string): StaffRoute | null {
     }
   }
   return null;
+}
+
+function hasStaffRouteAccess(roles: AppRole[], route: StaffRoute): boolean {
+  if (route.role === "pos") return canAccessPosModule(roles);
+  if (route.role === "scanner") return canAccessScannerModule(roles);
+  return userHasRoleAccess(roles, route.role);
 }
 
 async function fetchUserRoles(
@@ -81,7 +89,7 @@ export async function middleware(request: NextRequest) {
     }
 
     const roles = await fetchUserRoles(supabase, user.id);
-    if (!userHasRoleAccess(roles, staffRoute.role)) {
+    if (!hasStaffRouteAccess(roles, staffRoute)) {
       const loginUrl = request.nextUrl.clone();
       loginUrl.pathname = UNIFIED_LOGIN_PATH;
       loginUrl.searchParams.set("error", "access_denied");

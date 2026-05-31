@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut, User } from "lucide-react";
 import { SummerSplashLogo } from "@/components/brand/summer-splash-logo";
+import { PosScannerModeSwitch } from "@/components/staff/pos-scanner-mode-switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,7 +46,9 @@ export function ScannerMobileHeader({ className }: { className?: string }) {
           </div>
         </div>
 
-        <DropdownMenu open={open} onOpenChange={setOpen}>
+        <div className="flex shrink-0 items-center gap-2">
+          <PosScannerModeSwitch compact />
+          <DropdownMenu open={open} onOpenChange={setOpen}>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
@@ -75,6 +78,7 @@ export function ScannerMobileHeader({ className }: { className?: string }) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </div>
     </header>
   );

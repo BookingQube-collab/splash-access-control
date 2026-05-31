@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Pacifico, Sora } from "next/font/google";
+import { Inter, Sora } from "next/font/google";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -12,12 +12,6 @@ const sora = Sora({
   subsets: ["latin"],
   weight: ["500", "600", "700", "800"],
   variable: "--font-display",
-});
-
-const pacifico = Pacifico({
-  subsets: ["latin"],
-  weight: "400",
-  variable: "--font-script",
 });
 
 export const metadata: Metadata = {
@@ -45,7 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${sora.variable} ${pacifico.variable}`}
+      className={`${inter.variable} ${sora.variable}`}
       suppressHydrationWarning
     >
       <body className="relative min-h-screen antialiased" suppressHydrationWarning>

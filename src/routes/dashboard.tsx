@@ -1,13 +1,22 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { startOfWeek } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { RoleGuard } from "@/components/role-guard";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
-import { OverviewPanel } from "@/components/dashboard/overview-panel";
 import { ScheduleGrid } from "@/components/dashboard/schedule-grid";
+
+const OverviewPanel = dynamic(
+  () => import("@/components/dashboard/overview-panel").then((m) => ({ default: m.OverviewPanel })),
+  {
+    loading: () => (
+      <div className="h-48 animate-pulse rounded-2xl bg-white/60 lg:col-span-1" aria-hidden />
+    ),
+  },
+);
 import { useAuth } from "@/hooks/use-auth";
 import { getDashboardCounts, getDashboardSchedule } from "@/lib/summersplash.functions";
 import { formatYmd } from "@/lib/utils";

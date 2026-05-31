@@ -1,26 +1,22 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import {
-  Camera, Edit3, LogOut, Maximize2, Minimize2, Search, Sparkles, X,
-} from "lucide-react";
-import { Html5Qrcode } from "html5-qrcode";
+import { Camera, LogOut, Maximize2, Minimize2, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGuard } from "@/components/role-guard";
-import { QrPassModal } from "@/components/qr-pass-modal";
+import { PosScannerModeSwitch } from "@/components/staff/pos-scanner-mode-switch";
 import { PosBeachShell } from "@/components/pos/pos-beach-shell";
 import { SummerSplashLogo } from "@/components/brand/summer-splash-logo";
 import { PosCustomerSection, type PosRegistration } from "@/components/pos/pos-customer-section";
-import { PosPhoneSearchDialog } from "@/components/pos/pos-phone-search-dialog";
 import { PosGuestsSection } from "@/components/pos/pos-guests-section";
 import { PosPickSlotSection } from "@/components/pos/pos-pick-slot-section";
-import { PosSection, PosRow, type SlotRow } from "@/components/pos/pos-shared";
+import { PosSection, type SlotRow } from "@/components/pos/pos-shared";
 import { PosSlotTypeCards } from "@/components/pos/pos-slot-type-cards";
 import { PosTrustFooter } from "@/components/pos/pos-trust-footer";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { isPastRegistrationBooking, passBookingDate } from "@/lib/pass-active";
 import { isSlotPastForDate } from "@/lib/slot-time";
@@ -39,6 +35,26 @@ import {
 } from "@/lib/utils";
 
 import { useAuth } from "@/hooks/use-auth";
+import { canAccessPosModule } from "@/lib/staff-auth";
+import type { Html5Qrcode } from "html5-qrcode";
+
+const QrPassModal = dynamic(
+  () => import("@/components/qr-pass-modal").then((m) => ({ default: m.QrPassModal })),
+  { ssr: false },
+);
+
+const PosPhoneSearchDialog = dynamic(
+  () =>
+    import("@/components/pos/pos-phone-search-dialog").then((m) => ({
+      default: m.PosPhoneSearchDialog,
+    })),
+  { ssr: false },
+);
+
+const PosConfirmDialog = dynamic(
+  () => import("@/components/pos/pos-confirm-dialog").then((m) => ({ default: m.PosConfirmDialog })),
+  { ssr: false },
+);
 
 const POS_AUTO_SCAN_AFTER_REGISTER_KEY = "pos-auto-scan-after-register";
 
@@ -61,7 +77,7 @@ function writeAutoScanAfterRegisterPref(on: boolean) {
 
 export default function POSPage() {
   return (
-    <RoleGuard role="pos" bare>
+    <RoleGuard checkAccess={canAccessPosModule} bare>
       <POS />
     </RoleGuard>
   );
@@ -295,6 +311,7 @@ function POS() {
     const t = setTimeout(async () => {
       const el = document.getElementById("pos-scan-reader");
       if (!el) return;
+      const { Html5Qrcode } = await import("html5-qrcode");
       const q = new Html5Qrcode("pos-scan-reader");
       scanRef.current = q;
       try {
@@ -504,6 +521,7 @@ function POS() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <PosScannerModeSwitch compact />
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-[#0a4a52] ring-1 ring-[#dce8ea]">
               <span className="h-1.5 w-1.5 rounded-full bg-[#2db87a] animate-pulse" /> Live
             </span>
@@ -653,65 +671,18 @@ function POS() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent hideClose className="max-w-md border-0 bg-transparent p-0 shadow-none">
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            transition={{ type: "spring", stiffness: 280, damping: 26 }}
-            className="relative overflow-hidden rounded-3xl bg-white p-6 shadow-[0_24px_60px_-20px_rgba(10,74,82,0.2)]"
-          >
-            <button
-              type="button"
-              onClick={() => setConfirmOpen(false)}
-              className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full bg-[#f3f7f8] text-[#5a7a80] hover:bg-[#e8eef0]"
-            >
-              <X className="h-4 w-4" />
-            </button>
-            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#00a8b5]">Confirm registration</p>
-            <DialogTitle className="mt-1 font-display text-2xl font-extrabold text-[#0a4a52]">
-              Review details
-            </DialogTitle>
-            <DialogDescription className="mt-1 text-xs text-[#5a7a80]">
-              Double-check before generating the QR pass.
-            </DialogDescription>
-
-            <div className="mt-5 space-y-2.5">
-              <PosRow label="Date" value={activeDate ?? "—"} />
-              <PosRow label="Customer" value={displayName} />
-              <PosRow label="Mobile" value={mobile} />
-              {email && <PosRow label="Email" value={email} />}
-              <PosRow label="Slot" value={slot?.name ?? "—"} />
-              <PosRow
-                label="Guests"
-                value={
-                  <span className="font-display text-xl font-extrabold tabular-nums text-[#0a4a52]">{guests}</span>
-                }
-              />
-            </div>
-
-            <div className="mt-6 flex gap-2.5">
-              <button
-                type="button"
-                onClick={() => setConfirmOpen(false)}
-                className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#f3f7f8] text-sm font-semibold text-[#0a4a52] hover:bg-[#e8eef0]"
-              >
-                <Edit3 className="h-4 w-4" /> Edit
-              </button>
-              <button
-                type="button"
-                onClick={onConfirmSubmit}
-                disabled={submitting}
-                className="group relative inline-flex h-12 flex-[2] items-center justify-center gap-2 overflow-hidden rounded-2xl bg-[#00a8b5] text-sm font-bold text-white shadow-[0_12px_32px_-8px_rgba(0,168,181,0.5)] disabled:opacity-60"
-              >
-                <Sparkles className="h-4 w-4" />
-                <span>{submitting ? "Generating…" : "Confirm & Generate QR"}</span>
-                <span className="absolute inset-0 animate-shimmer opacity-50" />
-              </button>
-            </div>
-          </motion.div>
-        </DialogContent>
-      </Dialog>
+      <PosConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        activeDate={activeDate}
+        displayName={displayName}
+        mobile={mobile}
+        email={email}
+        slotName={slot?.name}
+        guests={guests}
+        submitting={submitting}
+        onConfirm={onConfirmSubmit}
+      />
 
       <PosPhoneSearchDialog
         open={passSearchOpen}

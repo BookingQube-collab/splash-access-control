@@ -1,9 +1,9 @@
 ﻿"use client";
 
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
 import { getPublicEvent } from "@/lib/summersplash.functions";
 import { MY_PASSES_QUERY_KEY } from "@/hooks/use-my-passes";
 import { usePublicPassReady } from "@/hooks/use-public-pass-ready";
@@ -18,10 +18,15 @@ import {
 import { RegisterBeachLayout } from "@/components/public/register-beach-layout";
 import { RegisterHero } from "@/components/public/register-hero";
 import { RegisterBookingCard } from "@/components/public/register-booking-card";
-import {
-  PublicRegisterDialog,
-  type PublicRegisterSuccess,
-} from "@/components/public/public-register-dialog";
+import type { PublicRegisterSuccess } from "@/components/public/public-register-dialog";
+
+const PublicRegisterDialog = dynamic(
+  () =>
+    import("@/components/public/public-register-dialog").then((m) => ({
+      default: m.PublicRegisterDialog,
+    })),
+  { ssr: false },
+);
 
 type PublicEventData = Awaited<ReturnType<typeof getPublicEvent>>;
 
@@ -158,7 +163,11 @@ export default function RegisterPage() {
     <RegisterBeachLayout>
       {isLoading && !data ? (
         <div className="grid place-items-center py-32">
-          <motion.div className="h-12 w-12 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          <div
+            className="h-12 w-12 animate-spin rounded-full border-2 border-white/30 border-t-white"
+            role="status"
+            aria-label="Loading"
+          />
         </div>
       ) : !data?.event ? (
         <main className="mx-auto max-w-lg px-4 py-16 sm:px-6">
