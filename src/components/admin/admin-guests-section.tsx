@@ -35,6 +35,7 @@ import {
   adminDeleteUser,
   adminListUsers,
   adminSetRole,
+  adminUpdateUser,
 } from "@/lib/admin.functions";
 import { adminUsersQueryDefaults } from "@/lib/admin-query";
 import { formatActionError } from "@/lib/utils";
@@ -49,6 +50,8 @@ export function AdminGuestsSection() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editUser, setEditUser] = useState<AdminGuestRow | null>(null);
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [editUsername, setEditUsername] = useState("");
   const [password, setPassword] = useState("");
   const [createRole, setCreateRole] = useState<StaffRole>("scanner");
 
@@ -117,12 +120,40 @@ export function AdminGuestsSection() {
       return;
     }
     try {
-      await adminCreateUser({ email: trimmedEmail, password, role: createRole });
+      await adminCreateUser({
+        email: trimmedEmail,
+        password,
+        role: createRole,
+        username: username.trim() || undefined,
+      });
       toast.success("Guest created");
       setEmail("");
+      setUsername("");
       setPassword("");
       setCreateOpen(false);
       await refetch();
+    } catch (e: unknown) {
+      toast.error(formatActionError(e));
+    }
+  };
+
+  const openEdit = (user: AdminGuestRow) => {
+    setEditUser(user);
+    setEditUsername(user.username ?? "");
+  };
+
+  const handleSaveUsername = async () => {
+    if (!editUser) return;
+    try {
+      await adminUpdateUser({
+        user_id: editUser.id,
+        username: editUsername.trim(),
+      });
+      toast.success("Username updated");
+      setEditUser((prev) =>
+        prev ? { ...prev, username: editUsername.trim().toLowerCase() || null } : prev,
+      );
+      invalidate();
     } catch (e: unknown) {
       toast.error(formatActionError(e));
     }
@@ -155,7 +186,7 @@ export function AdminGuestsSection() {
         isError={isError}
         errorMessage={isError ? formatActionError(error) : undefined}
         onPageChange={setPage}
-        onEdit={setEditUser}
+        onEdit={openEdit}
         onToggleRole={handleToggleRole}
         onDelete={handleDelete}
       />
@@ -176,6 +207,18 @@ export function AdminGuestsSection() {
                 placeholder="guest@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                className={pillInput}
+              />
+            </div>
+            <div>
+              <Label className="mb-1.5 block text-xs font-semibold text-[#64748b]">
+                Username <span className="font-normal text-[#94a3b8]">(optional — for POS login)</span>
+              </Label>
+              <Input
+                placeholder="e.g. pos_agent_1"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="off"
                 className={pillInput}
               />
             </div>
@@ -235,10 +278,36 @@ export function AdminGuestsSection() {
             <>
               <DialogHeader>
                 <DialogTitle className="font-display text-xl text-[#134e4a]">
-                  Edit roles
+                  Edit guest
                 </DialogTitle>
               </DialogHeader>
               <p className="text-sm text-[#64748b]">{editUser.email}</p>
+              <div>
+                <Label className="mb-1.5 block text-xs font-semibold text-[#64748b]">
+                  Username
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="pos_agent_1"
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value)}
+                    autoComplete="off"
+                    className={pillInput}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveUsername()}
+                    className="inline-flex h-11 shrink-0 items-center justify-center rounded-[14px] px-4 text-sm font-semibold text-white"
+                    style={{ background: ADMIN_TEAL }}
+                  >
+                    Save
+                  </button>
+                </div>
+                <p className="mt-1.5 text-xs text-[#94a3b8]">
+                  Staff can sign in with this username or their email.
+                </p>
+              </div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#64748b]">Roles</p>
               <div className="flex flex-wrap gap-2 py-2">
                 {STAFF_ROLES.map((r) => {
                   const has = editUser.roles.includes(r);

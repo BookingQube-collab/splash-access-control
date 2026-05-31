@@ -422,6 +422,8 @@ export function buildDigitalPassEmailContent(input: DigitalPassEmailContent): {
 
                     ${detailRow("👥", "Guests", guests)}
 
+                    ${visitDate ? detailRow("📆", "Date", visitDate) : ""}
+
                     ${detailRow("🕐", "Slot", slotLabel)}
 
                     ${detailRow("📍", "Venue", venue)}

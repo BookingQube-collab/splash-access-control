@@ -5,6 +5,15 @@ export type SlotTimeBounds = {
   ends_at: string;
 };
 
+export type SlotTimeRange = SlotTimeBounds & {
+  starts_at: string;
+};
+
+export type PosSlotPickCandidate = SlotTimeRange & {
+  id: string;
+  remaining?: number;
+};
+
 function parseSlotInstant(value: string | Date): Date | null {
   if (value instanceof Date) return isValid(value) ? value : null;
   try {
@@ -54,6 +63,15 @@ export function formatSlotTimeRangeFromHm(startHm: string, endHm: string): strin
   return formatSlotTimeRange(s, e);
 }
 
+/** Slot start instant on a booking calendar day (local time). */
+export function slotStartOnDate(startsAt: string, dateYmd: string): Date | null {
+  const slot = parseISO(startsAt);
+  if (!isValid(slot)) return null;
+  const base = parseYmd(dateYmd);
+  base.setHours(slot.getHours(), slot.getMinutes(), slot.getSeconds(), slot.getMilliseconds());
+  return base;
+}
+
 /** Slot end instant on a booking calendar day (local time, same as passEnd). */
 export function slotEndOnDate(endsAt: string, dateYmd: string): Date | null {
   const slot = parseISO(endsAt);
@@ -80,6 +98,56 @@ export function isSlotPastForDate(
   const end = slotEndOnDate(slot.ends_at, dateYmd);
   if (!end) return false;
   return end.getTime() < now.getTime();
+}
+
+/** True when `now` falls within the slot window on `dateYmd` (today only). */
+export function isSlotActiveForDate(
+  slot: SlotTimeRange,
+  dateYmd: string,
+  now: Date = new Date(),
+): boolean {
+  if (dateYmd !== todayYmd()) return false;
+  const start = slotStartOnDate(slot.starts_at, dateYmd);
+  const end = slotEndOnDate(slot.ends_at, dateYmd);
+  if (!start || !end) return false;
+  const t = now.getTime();
+  return t >= start.getTime() && t <= end.getTime();
+}
+
+/**
+ * POS default slot: current active slot on today, else nearest upcoming slot today;
+ * on future dates, earliest available slot by start time.
+ */
+export function pickDefaultPosSlotId(
+  slots: readonly PosSlotPickCandidate[],
+  dateYmd: string,
+  now: Date = new Date(),
+): string | null {
+  const available = slots.filter(
+    (s) => (s.remaining ?? 1) > 0 && !isSlotPastForDate(s, dateYmd, now),
+  );
+  if (available.length === 0) return null;
+
+  const today = todayYmd();
+  if (dateYmd === today) {
+    const active = available.find((s) => isSlotActiveForDate(s, dateYmd, now));
+    if (active) return active.id;
+
+    const upcoming = available
+      .map((s) => ({ s, start: slotStartOnDate(s.starts_at, dateYmd) }))
+      .filter(({ start }) => start && start.getTime() > now.getTime())
+      .sort((a, b) => a.start!.getTime() - b.start!.getTime());
+    if (upcoming.length > 0) return upcoming[0].s.id;
+
+    return null;
+  }
+
+  const sorted = [...available].sort((a, b) => {
+    const sa = slotStartOnDate(a.starts_at, dateYmd)?.getTime() ?? 0;
+    const sb = slotStartOnDate(b.starts_at, dateYmd)?.getTime() ?? 0;
+    return sa - sb;
+  });
+  return sorted[0]?.id ?? null;
 }
 
 /** Short UI label for a slot that cannot be booked on `dateYmd`. */

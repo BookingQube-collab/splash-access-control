@@ -29,6 +29,8 @@ import {
   shouldOfferPasskeyEnrollment,
   signInWithPasskeyForStaff,
 } from "@/lib/passkey-auth";
+import { isEmailLikeStaffIdentifier } from "@/lib/staff-auth";
+import { resolveStaffLoginEmail } from "@/lib/staff-login.server";
 import { cn } from "@/lib/utils";
 
 const REMEMBER_KEY = "splash-staff-remember";
@@ -48,7 +50,7 @@ const fieldInputClass =
 export function StaffLogin({ title, subtitle }: StaffLoginProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
@@ -65,7 +67,7 @@ export function StaffLogin({ title, subtitle }: StaffLoginProps) {
     setRemember(savedRemember);
     if (savedRemember) {
       const savedEmail = localStorage.getItem(REMEMBER_EMAIL_KEY);
-      if (savedEmail) setEmail(savedEmail);
+      if (savedEmail) setLoginId(savedEmail);
     }
   }, []);
 
@@ -114,7 +116,16 @@ export function StaffLogin({ title, subtitle }: StaffLoginProps) {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const resolved = await resolveStaffLoginEmail(loginId);
+    if ("error" in resolved) {
+      setLoading(false);
+      toast.error(resolved.error);
+      return;
+    }
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: resolved.email,
+      password,
+    });
     if (error || !data.user) {
       setLoading(false);
       toast.error(error?.message || "Login failed");
@@ -126,7 +137,7 @@ export function StaffLogin({ title, subtitle }: StaffLoginProps) {
       toast.error(check.message);
       return;
     }
-    persistRemember(remember, email);
+    persistRemember(remember, loginId);
     toast.success("Signed in");
     setLoading(false);
     await finishSignIn(data.user.id, check.redirectTo);
@@ -155,9 +166,13 @@ export function StaffLogin({ title, subtitle }: StaffLoginProps) {
   };
 
   const onForgotPassword = async () => {
-    const trimmed = email.trim();
+    const trimmed = loginId.trim();
     if (!trimmed) {
       toast.info("Enter your email above, or contact your administrator for access.");
+      return;
+    }
+    if (!isEmailLikeStaffIdentifier(trimmed)) {
+      toast.info("Password reset requires your email address. Enter your email, or contact your administrator.");
       return;
     }
     const redirectUrl =
@@ -197,19 +212,19 @@ export function StaffLogin({ title, subtitle }: StaffLoginProps) {
             className="space-y-5"
           >
             <div>
-              <Label htmlFor="staff-email" className={fieldLabelClass}>
+              <Label htmlFor="staff-login-id" className={fieldLabelClass}>
                 <Mail className="h-3.5 w-3.5" />
-                Email
+                Email or username
               </Label>
               <motion.div className="relative" whileFocus={{ scale: 1.01 }}>
                 <Input
-                  id="staff-email"
-                  type="email"
+                  id="staff-login-id"
+                  type="text"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  placeholder="Enter your email"
+                  value={loginId}
+                  onChange={(e) => setLoginId(e.target.value)}
+                  autoComplete="username"
+                  placeholder="Email or username"
                   className={fieldInputClass}
                 />
                 <User
@@ -257,7 +272,7 @@ export function StaffLogin({ title, subtitle }: StaffLoginProps) {
                   onCheckedChange={(v) => {
                     const next = v === true;
                     setRemember(next);
-                    persistRemember(next, email);
+                    persistRemember(next, loginId);
                   }}
                   className="border-[#00a8b5] data-[state=checked]:bg-[#00a8b5] data-[state=checked]:text-white"
                 />

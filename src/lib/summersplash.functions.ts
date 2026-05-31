@@ -248,10 +248,20 @@ export async function publicRegister(input: z.infer<typeof registerSchema>) {
   const { scheduleBookingQubeOutboundSync } = await import("@/lib/bookingqube.sync");
 
   if (dupe) {
+    const { data: updatedDupe, error: dupeUpdateError } = await supabaseAdmin
+      .from("registrations")
+      .update({
+        customer_name: data.customer_name,
+        guest_count: data.guest_count,
+        email: data.email || null,
+      })
+      .eq("id", dupe.id)
+      .select("id, qr_token")
+      .single();
+    if (dupeUpdateError) throw new Error(dupeUpdateError.message);
     scheduleBookingQubeOutboundSync(dupe.id);
     if (data.email?.trim()) {
-      const { scheduleDigitalPassEmail } = await import("@/lib/mailgun.server");
-      scheduleDigitalPassEmail(dupe.id, { email: data.email.trim() });
+      await scheduleRegistrationPassEmail(dupe.id, data.email.trim());
     }
     return { id: dupe.id, qr_token: dupe.qr_token };
   }
@@ -280,8 +290,7 @@ export async function publicRegister(input: z.infer<typeof registerSchema>) {
     if (error) throw new Error(error.message);
     scheduleBookingQubeOutboundSync(reg.id);
     if (data.email?.trim()) {
-      const { scheduleDigitalPassEmail } = await import("@/lib/mailgun.server");
-      scheduleDigitalPassEmail(reg.id, { email: data.email.trim() });
+      await scheduleRegistrationPassEmail(reg.id, data.email.trim());
     }
     return { id: reg.id, qr_token: reg.qr_token };
 }
@@ -983,7 +992,13 @@ export async function getScannerSidePanelData(limit = 20) {
 
 const posRegisterSchema = registerSchema.extend({
   auto_check_in: z.boolean().optional(),
+  skip_email: z.boolean().optional(),
 });
+
+async function scheduleRegistrationPassEmail(registrationId: string, email: string) {
+  const { scheduleDigitalPassEmail } = await import("@/lib/mailgun.server");
+  scheduleDigitalPassEmail(registrationId, { email });
+}
 
 // ============ POS ============
 export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
@@ -1028,9 +1043,8 @@ export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
       .single();
     if (dupeUpdateError) throw new Error(dupeUpdateError.message);
     scheduleBookingQubeOutboundSync(dupe.id);
-    if (data.email?.trim()) {
-      const { scheduleDigitalPassEmail } = await import("@/lib/mailgun.server");
-      scheduleDigitalPassEmail(dupe.id, { email: data.email.trim() });
+    if (data.email?.trim() && !data.skip_email) {
+      await scheduleRegistrationPassEmail(dupe.id, data.email.trim());
     }
     let checkIn: Awaited<ReturnType<typeof recordEntryCheckIn>> | undefined;
     if (data.auto_check_in) {
@@ -1063,9 +1077,8 @@ export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
     .single();
   if (error) throw new Error(error.message);
   scheduleBookingQubeOutboundSync(reg.id);
-  if (data.email?.trim()) {
-    const { scheduleDigitalPassEmail } = await import("@/lib/mailgun.server");
-    scheduleDigitalPassEmail(reg.id, { email: data.email.trim() });
+  if (data.email?.trim() && !data.skip_email) {
+    await scheduleRegistrationPassEmail(reg.id, data.email.trim());
   }
   let checkIn: Awaited<ReturnType<typeof recordEntryCheckIn>> | undefined;
   if (data.auto_check_in) {

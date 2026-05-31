@@ -17,6 +17,7 @@ import {
   registrationStatusFromScanRow,
 } from "@/lib/scan-metrics";
 import { formatYmd } from "@/lib/utils";
+import { normalizeStaffUsername } from "@/lib/staff-auth";
 import { getDashboardCounts, getDashboardSchedule } from "@/lib/summersplash.functions";
 import { getSupabaseAdminClientOrNull } from "@/integrations/supabase/client.server";
 import type { AdminServerFilters } from "@/lib/admin-filters.types";
@@ -790,31 +791,50 @@ export async function adminListUsers() {
   const { supabase } = await adminContext();
   const admin = getSupabaseAdminClientOrNull();
 
-  type ListedUser = { id: string; email: string; created_at: string };
+  type ListedUser = { id: string; email: string; username: string | null; created_at: string };
   let users: ListedUser[] = [];
+
+  const { data: profiles, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, email, username, created_at");
+  if (profileError) throw new Error(profileError.message);
+  const profileById = Object.fromEntries(
+    (profiles ?? []).map((p) => [
+      p.id,
+      {
+        email: p.email ?? "",
+        username: p.username ?? null,
+        created_at: p.created_at,
+      },
+    ]),
+  );
 
   if (admin) {
     const { data: authList, error: listError } = await admin.auth.admin.listUsers({ perPage: 200 });
     if (listError) throw new Error(listError.message);
-    users = (authList?.users ?? []).map((u) => ({
-      id: u.id,
-      email: u.email ?? "",
-      created_at: u.created_at ?? new Date().toISOString(),
-    }));
+    users = (authList?.users ?? []).map((u) => {
+      const profile = profileById[u.id];
+      return {
+        id: u.id,
+        email: u.email ?? profile?.email ?? "",
+        username: profile?.username ?? null,
+        created_at: u.created_at ?? profile?.created_at ?? new Date().toISOString(),
+      };
+    });
   }
 
-  // Fallback when service role key is missing: read profiles (admin RLS allows all rows)
   if (users.length === 0) {
-    const { data: profiles, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, email, created_at")
-      .order("created_at", { ascending: false });
-    if (profileError) throw new Error(profileError.message);
     users = (profiles ?? []).map((p) => ({
       id: p.id,
       email: p.email ?? "",
+      username: p.username ?? null,
       created_at: p.created_at,
     }));
+  } else {
+    for (const u of users) {
+      const profile = profileById[u.id];
+      if (profile?.username && !u.username) u.username = profile.username;
+    }
   }
 
   const { data: rolesData, error: rolesError } = await supabase.from("user_roles").select("user_id, role");
@@ -833,16 +853,42 @@ export async function adminListUsers() {
     };
 }
 
+const staffUsernameSchema = z
+  .string()
+  .trim()
+  .min(3, "Username must be at least 3 characters")
+  .max(32, "Username must be at most 32 characters")
+  .regex(/^[a-zA-Z0-9_-]+$/, "Username may only use letters, numbers, _ and -")
+  .optional()
+  .or(z.literal(""));
+
+async function assertUsernameAvailable(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdminClientOrNull>>,
+  username: string,
+  excludeUserId?: string,
+) {
+  let query = admin.from("profiles").select("id").eq("username", username);
+  if (excludeUserId) query = query.neq("id", excludeUserId);
+  const { data, error } = await query.maybeSingle();
+  if (error && /username/.test(error.message ?? "")) {
+    throw new Error("Username support is not available yet — apply the latest database migration.");
+  }
+  if (error) throw new Error(error.message);
+  if (data) throw new Error("Username is already taken");
+}
+
 const createUserSchema = z.object({
   email: z.string().trim().email("Enter a valid email"),
   password: z.string().min(6, "Password must be at least 6 characters").max(72),
-    role: z.enum(["admin", "dashboard", "pos", "scanner"]),
+  role: z.enum(["admin", "dashboard", "pos", "scanner"]),
+  username: staffUsernameSchema,
 });
 
 export async function adminCreateUser(input: {
   email: string;
   password: string;
   role: "admin" | "dashboard" | "pos" | "scanner";
+  username?: string;
 }) {
   const parsed = createUserSchema.safeParse(input);
   if (!parsed.success) {
@@ -852,12 +898,30 @@ export async function adminCreateUser(input: {
   const { supabase } = await adminContext();
   const admin = requireSupabaseAdmin();
 
+  const normalizedUsername = data.username?.trim()
+    ? normalizeStaffUsername(data.username)
+    : null;
+  if (data.username?.trim() && !normalizedUsername) {
+    throw new Error("Username may only use letters, numbers, _ and - (3–32 characters)");
+  }
+  if (normalizedUsername) {
+    await assertUsernameAvailable(admin, normalizedUsername);
+  }
+
   const { data: created, error } = await admin.auth.admin.createUser({
       email: data.email,
       password: data.password,
       email_confirm: true,
     });
     if (error || !created.user) throw new Error(error?.message || "Failed to create user");
+
+  const profilePatch: { email: string; username?: string | null } = { email: data.email };
+  if (normalizedUsername) profilePatch.username = normalizedUsername;
+  const { error: profileError } = await admin
+    .from("profiles")
+    .update(profilePatch)
+    .eq("id", created.user.id);
+  if (profileError) throw new Error(profileError.message);
 
   const { error: roleError } = await supabase
     .from("user_roles")
@@ -912,6 +976,7 @@ const updateUserSchema = z.object({
   email: z.string().trim().email("Enter a valid email").optional(),
   password: z.string().min(6, "Password must be at least 6 characters").max(72).optional(),
   roles: z.array(appRoleSchema).optional(),
+  username: staffUsernameSchema,
 });
 
 export async function adminUpdateUser(input: {
@@ -919,6 +984,7 @@ export async function adminUpdateUser(input: {
   email?: string;
   password?: string;
   roles?: ("admin" | "dashboard" | "pos" | "scanner")[];
+  username?: string;
 }) {
   const data = updateUserSchema.parse(input);
   const { supabase } = await adminContext();
@@ -935,6 +1001,23 @@ export async function adminUpdateUser(input: {
       const { error: profileError } = await admin.from("profiles").update({ email: data.email }).eq("id", data.user_id);
       if (profileError) throw new Error(profileError.message);
     }
+  }
+
+  if (data.username !== undefined) {
+    const normalizedUsername = data.username.trim()
+      ? normalizeStaffUsername(data.username)
+      : null;
+    if (data.username.trim() && !normalizedUsername) {
+      throw new Error("Username may only use letters, numbers, _ and - (3–32 characters)");
+    }
+    if (normalizedUsername) {
+      await assertUsernameAvailable(admin, normalizedUsername, data.user_id);
+    }
+    const { error: usernameError } = await admin
+      .from("profiles")
+      .update({ username: normalizedUsername })
+      .eq("id", data.user_id);
+    if (usernameError) throw new Error(usernameError.message);
   }
 
   if (data.roles) {

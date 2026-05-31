@@ -13,11 +13,12 @@ type Props = {
   autoFocus?: boolean;
   id?: string;
   variant?: "soft" | "outline";
+  disabled?: boolean;
 };
 
 export function IntlPhoneInput({
   value, onChange, onBlur, placeholder = "Mobile number", className,
-  defaultCountry = "qa", required, autoFocus, id, variant = "soft",
+  defaultCountry = "qa", required, autoFocus, id, variant = "soft", disabled,
 }: Props) {
   const shell =
     variant === "soft"
@@ -30,7 +31,8 @@ export function IntlPhoneInput({
         value={value}
         onChange={(v) => onChange(v ?? "")}
         placeholder={placeholder}
-        inputProps={{ id, required, autoFocus, onBlur }}
+        disabled={disabled}
+        inputProps={{ id, required, autoFocus, onBlur, disabled, readOnly: disabled }}
       />
     </div>
   );

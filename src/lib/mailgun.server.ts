@@ -1,7 +1,7 @@
 import "server-only";
 
 import { after } from "next/server";
-import { format, parseISO, isValid } from "date-fns";
+import { format } from "date-fns";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   buildDigitalPassEmailContent,
@@ -11,7 +11,9 @@ import {
   buildDigitalPassInlineAssets,
   type MailInlineAttachment,
 } from "@/lib/email/digital-pass-inline-assets";
-import { getEmailSiteOrigin, myPassesAfterRegisterUrl, passUrl } from "@/lib/public-url";
+import { getEmailSiteOrigin, emailMyPassesDownloadUrl, passUrl } from "@/lib/public-url";
+import { registrationBookingYmd } from "@/lib/pass-active";
+import { parseYmd } from "@/lib/utils";
 import { formatSlotTimeRange } from "@/lib/slot-time";
 
 const MAILGUN_LOG = "[mailgun]";
@@ -404,13 +406,11 @@ export function isMailgunConfiguredFromEnv(): boolean {
 }
 
 
-function formatVisitDate(iso: string): string {
+function formatVisitDateFromBookingYmd(ymd: string): string {
   try {
-    const d = parseISO(iso);
-    if (!isValid(d)) return iso.slice(0, 10);
-    return format(d, "EEEE, MMMM d, yyyy");
+    return format(parseYmd(ymd), "EEEE, MMMM d, yyyy");
   } catch {
-    return iso.slice(0, 10);
+    return ymd;
   }
 }
 
@@ -667,22 +667,23 @@ export async function sendDigitalPassEmail(input: {
   slotStartsAt?: string | null;
   slotEndsAt?: string | null;
   eventName?: string | null;
-  visitDateIso: string;
+  visitDateYmd: string;
   registrationId?: string;
+  siteOrigin?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const to = input.email.trim();
   if (!to) return { ok: false, error: "No recipient email" };
 
-  const origin = getEmailSiteOrigin();
+  const origin = input.siteOrigin?.trim() || getEmailSiteOrigin();
   const eventName = input.eventName?.trim() || "Park Guest";
   const slotLabel = formatEmailSlotLabel(
     input.slotName,
     input.slotStartsAt,
     input.slotEndsAt,
   );
-  const visitDate = formatVisitDate(input.visitDateIso);
-  const passLink = passUrl(input.qrToken);
-  const myPassesLink = myPassesAfterRegisterUrl(input.mobile, input.qrToken);
+  const visitDate = formatVisitDateFromBookingYmd(input.visitDateYmd);
+  const passLink = passUrl(input.qrToken, origin);
+  const myPassesLink = emailMyPassesDownloadUrl(input.qrToken, input.mobile, origin);
 
   const { attachments, logoUrl, qrImageUrl } = await buildDigitalPassInlineAssets(input.qrToken);
 
@@ -756,7 +757,7 @@ type RunResult = { ok: boolean; skipped?: boolean; error?: string };
 
 async function runDigitalPassEmail(
   registrationId: string,
-  options?: { email?: string },
+  options?: { email?: string; siteOrigin?: string },
 ): Promise<RunResult> {
   const config = await resolveMailConfig();
   if (!config) {
@@ -796,18 +797,25 @@ async function runDigitalPassEmail(
     events: { name: string } | null;
   } | null;
 
+  const { resolveEmailSiteOrigin } = await import("@/lib/public-url.server");
+  const siteOrigin = options?.siteOrigin ?? (await resolveEmailSiteOrigin());
+
+  const bookingYmd = registrationBookingYmd(reg.created_at);
+  const guestCount = Math.max(1, Number(reg.guest_count) || 1);
+
   const result = await sendDigitalPassEmail({
     email: toEmail,
     customerName: reg.customer_name,
     qrToken: reg.qr_token,
     mobile: reg.mobile,
-    guestCount: reg.guest_count ?? 1,
+    guestCount,
     slotName: slot?.name ?? "Your slot",
     slotStartsAt: slot?.starts_at,
     slotEndsAt: slot?.ends_at,
     eventName: slot?.events?.name,
-    visitDateIso: reg.created_at,
+    visitDateYmd: bookingYmd,
     registrationId: reg.id,
+    siteOrigin,
   });
 
   if (!result.ok) {
@@ -823,7 +831,7 @@ async function runDigitalPassEmail(
 /** Schedule digital pass email after registration (non-blocking via `after`). */
 export function scheduleDigitalPassEmail(
   registrationId: string,
-  options?: { email?: string },
+  options?: { email?: string; siteOrigin?: string },
 ): void {
   const run = () =>
     runDigitalPassEmail(registrationId, options).catch((err) => {

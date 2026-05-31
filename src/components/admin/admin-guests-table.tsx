@@ -186,6 +186,11 @@ export function AdminGuestsTable({
                             {displayName}
                           </div>
                           <div className="truncate text-xs text-[#94a3b8]">{u.email}</div>
+                          {u.username ? (
+                            <div className="truncate text-xs font-medium text-[#0d9488]">
+                              @{u.username}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </td>

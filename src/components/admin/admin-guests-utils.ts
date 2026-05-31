@@ -9,6 +9,7 @@ export const SYSTEM_ROLE_COUNT = STAFF_ROLES.length;
 export type AdminGuestRow = {
   id: string;
   email: string;
+  username: string | null;
   created_at: string;
   roles: string[];
 };
@@ -124,7 +125,14 @@ export function filterGuestRows(users: AdminGuestRow[], filters: GuestFilters): 
   return users.filter((u) => {
     if (q) {
       const name = guestDisplayName(u.email).toLowerCase();
-      if (!u.email.toLowerCase().includes(q) && !name.includes(q)) return false;
+      const username = u.username?.toLowerCase() ?? "";
+      if (
+        !u.email.toLowerCase().includes(q) &&
+        !name.includes(q) &&
+        !username.includes(q)
+      ) {
+        return false;
+      }
     }
 
     if (filters.role && !u.roles.includes(filters.role)) return false;
@@ -157,12 +165,12 @@ export function formatGuestDateLines(iso: string): { date: string; time: string 
 }
 
 export function exportGuestsCsv(users: AdminGuestRow[]): void {
-  const header = ["email", "roles", "status", "created_at"];
+  const header = ["email", "username", "roles", "status", "created_at"];
   const lines = users.map((u) => {
     const status = isGuestActive(u) ? "active" : "inactive";
     const roles = u.roles.join("|");
     const created = u.created_at;
-    return [u.email, roles, status, created]
+    return [u.email, u.username ?? "", roles, status, created]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(",");
   });

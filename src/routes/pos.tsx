@@ -19,7 +19,7 @@ import { PosTrustFooter } from "@/components/pos/pos-trust-footer";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { isPastRegistrationBooking, passBookingDate } from "@/lib/pass-active";
-import { isSlotPastForDate } from "@/lib/slot-time";
+import { isSlotPastForDate, pickDefaultPosSlotId } from "@/lib/slot-time";
 import { getPublicEvent, posRegister } from "@/lib/summersplash.functions";
 import { usePosCustomerLookup } from "@/hooks/use-pos-customer-lookup";
 import { tryPrintEntryPass } from "@/lib/zebra/print-entry-pass";
@@ -57,6 +57,13 @@ const PosConfirmDialog = dynamic(
 );
 
 const POS_AUTO_SCAN_AFTER_REGISTER_KEY = "pos-auto-scan-after-register";
+const POS_DEFAULT_GUEST_KEY = "pos-default-guest-details";
+
+const POS_DEFAULT_GUEST = {
+  mobile: "+97430077074",
+  name: "E3",
+  email: "rajan@eeeqa.com",
+} as const;
 
 function readAutoScanAfterRegisterPref(): boolean {
   if (typeof window === "undefined") return false;
@@ -73,6 +80,43 @@ function writeAutoScanAfterRegisterPref(on: boolean) {
   } catch {
     /* noop */
   }
+}
+
+function readDefaultGuestPref(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const v = window.localStorage.getItem(POS_DEFAULT_GUEST_KEY);
+    if (v === null) return true;
+    return v === "true";
+  } catch {
+    return true;
+  }
+}
+
+function writeDefaultGuestPref(on: boolean) {
+  try {
+    window.localStorage.setItem(POS_DEFAULT_GUEST_KEY, on ? "true" : "false");
+  } catch {
+    /* noop */
+  }
+}
+
+function applyDefaultGuestFields(
+  setName: (v: string) => void,
+  setMobile: (v: string) => void,
+  setEmail: (v: string) => void,
+  refs: {
+    nameEditedRef: { current: boolean };
+    emailEditedRef: { current: boolean };
+    lastLookupKeyRef: { current: string };
+  },
+) {
+  refs.nameEditedRef.current = true;
+  refs.emailEditedRef.current = true;
+  refs.lastLookupKeyRef.current = phoneIdentityKey(POS_DEFAULT_GUEST.mobile);
+  setName(POS_DEFAULT_GUEST.name);
+  setMobile(POS_DEFAULT_GUEST.mobile);
+  setEmail(POS_DEFAULT_GUEST.email);
 }
 
 export default function POSPage() {
@@ -193,15 +237,46 @@ function POS() {
 
   const [isFs, setIsFs] = useState(false);
   const [autoScanAfterRegister, setAutoScanAfterRegister] = useState(false);
+  const [defaultGuestDetails, setDefaultGuestDetails] = useState(true);
 
   useEffect(() => {
     setAutoScanAfterRegister(readAutoScanAfterRegisterPref());
+    setDefaultGuestDetails(readDefaultGuestPref());
   }, []);
 
   const onAutoScanAfterRegisterChange = (on: boolean) => {
     setAutoScanAfterRegister(on);
     writeAutoScanAfterRegisterPref(on);
   };
+
+  const onDefaultGuestDetailsChange = (on: boolean) => {
+    setDefaultGuestDetails(on);
+    writeDefaultGuestPref(on);
+    if (on) {
+      applyDefaultGuestFields(setName, setMobile, setEmail, {
+        nameEditedRef,
+        emailEditedRef,
+        lastLookupKeyRef,
+      });
+    } else {
+      setName("");
+      setMobile("");
+      setEmail("");
+      setGuests(1);
+      nameEditedRef.current = false;
+      emailEditedRef.current = false;
+      lastLookupKeyRef.current = "";
+    }
+  };
+
+  useEffect(() => {
+    if (!defaultGuestDetails) return;
+    applyDefaultGuestFields(setName, setMobile, setEmail, {
+      nameEditedRef,
+      emailEditedRef,
+      lastLookupKeyRef,
+    });
+  }, [defaultGuestDetails]);
 
   useEffect(() => {
     const onChange = () => setIsFs(!!document.fullscreenElement);
@@ -266,6 +341,7 @@ function POS() {
   };
 
   const handleScanSubmit = (raw: string) => {
+    if (defaultGuestDetails) return;
     const text = (raw ?? "").trim();
     if (!text) return;
     const tokenMatch = text.match(/[0-9a-fA-F-]{36}/);
@@ -345,8 +421,19 @@ function POS() {
     if (!s || s.remaining <= 0 || isSlotPastForDate(s, activeDate)) setSlotId("");
   }, [slots, slotId, activeDate]);
 
+  useEffect(() => {
+    if (!defaultGuestDetails || !activeDate || slots.length === 0) return;
+    const defaultId = pickDefaultPosSlotId(slots, activeDate);
+    if (!defaultId) return;
+    const current = slots.find((s) => s.id === slotId);
+    const currentInvalid =
+      !current || current.remaining <= 0 || isSlotPastForDate(current, activeDate);
+    if (!slotId || currentInvalid) setSlotId(defaultId);
+  }, [defaultGuestDetails, activeDate, slots, slotId]);
+
   // Clear auto-filled fields when mobile is too short for lookup.
   useEffect(() => {
+    if (defaultGuestDetails) return;
     const q = mobile.trim();
     if (!hasMobileLookupInput(q)) {
       if (lastLookupKeyRef.current) {
@@ -360,6 +447,7 @@ function POS() {
 
   // Section 2 mobile lookup → silent inline auto-fill (name / email / guests).
   useEffect(() => {
+    if (defaultGuestDetails) return;
     if (!hasMobileLookupInput(debouncedMobile)) return;
     if (!mobileQuery.isSuccess || mobileQuery.isFetching) return;
     if (!mobileQuery.data) return;
@@ -474,20 +562,29 @@ function POS() {
         guest_count: guests,
         booking_date: activeDate,
         auto_check_in: autoScanAfterRegister,
+        skip_email: defaultGuestDetails,
       });
       setLastToken(res.qr_token);
       setModalMeta({ name: displayName, slot: slot.name, guests });
       setConfirmOpen(false);
       setModalOpen(true);
       toast.success("Registered ✓");
-      setName("");
-      setMobile("");
-      setEmail("");
+      if (defaultGuestDetails) {
+        applyDefaultGuestFields(setName, setMobile, setEmail, {
+          nameEditedRef,
+          emailEditedRef,
+          lastLookupKeyRef,
+        });
+      } else {
+        setName("");
+        setMobile("");
+        setEmail("");
+        nameEditedRef.current = false;
+        emailEditedRef.current = false;
+        lastLookupKeyRef.current = "";
+      }
       setGuests(1);
-      setSlotId("");
-      nameEditedRef.current = false;
-      emailEditedRef.current = false;
-      lastLookupKeyRef.current = "";
+      if (!defaultGuestDetails) setSlotId("");
       refetch();
       if (autoScanAfterRegister) {
         if (res.checkIn?.valid) {
@@ -525,6 +622,22 @@ function POS() {
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-[#0a4a52] ring-1 ring-[#dce8ea]">
               <span className="h-1.5 w-1.5 rounded-full bg-[#2db87a] animate-pulse" /> Live
             </span>
+            <label
+              htmlFor="pos-default-guest-details"
+              className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-[#0a4a52] ring-1 ring-[#dce8ea] transition hover:bg-[#eefafb]"
+              title="Use fixed guest profile and auto-select slot by time"
+            >
+              <span className="hidden max-w-[9rem] leading-tight sm:inline md:max-w-none">
+                Default guest
+              </span>
+              <span className="sm:hidden">Guest</span>
+              <Switch
+                id="pos-default-guest-details"
+                checked={defaultGuestDetails}
+                onCheckedChange={onDefaultGuestDetailsChange}
+                className="data-[state=checked]:bg-[#00a8b5]"
+              />
+            </label>
             <label
               htmlFor="pos-auto-scan-after-register"
               className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-[#0a4a52] ring-1 ring-[#dce8ea] transition hover:bg-[#eefafb]"
@@ -607,6 +720,7 @@ function POS() {
                   setEmail(v);
                 }}
                 fieldsLoading={customerFieldsLoading}
+                locked={defaultGuestDetails}
               />
             </PosSection>
           </div>

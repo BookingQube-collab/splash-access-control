@@ -43,3 +43,20 @@ export function resolveStaffRedirect(roles: AppRole[]): string | null {
   }
   return null;
 }
+
+const STAFF_USERNAME_RE = /^[a-z0-9_-]{3,32}$/;
+
+export function isEmailLikeStaffIdentifier(value: string): boolean {
+  return value.trim().includes("@");
+}
+
+/** Lowercase username for storage and lookup. Returns null when invalid. */
+export function normalizeStaffUsername(value: string): string | null {
+  const v = value.trim().toLowerCase();
+  if (!STAFF_USERNAME_RE.test(v)) return null;
+  return v;
+}
+
+export function isValidStaffUsername(value: string): boolean {
+  return normalizeStaffUsername(value) !== null;
+}
