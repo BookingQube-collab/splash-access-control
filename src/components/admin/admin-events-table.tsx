@@ -93,6 +93,7 @@ export function AdminEventsTable({
   onEdit,
   onToggleActive,
   onDelete,
+  emptyMessage = "No events match your filters.",
 }: {
   events: AdminEventRow[];
   metricsByEventId: Record<string, EventRowMetrics>;
@@ -104,6 +105,7 @@ export function AdminEventsTable({
   onEdit: (e: AdminEventRow) => void;
   onToggleActive: (e: AdminEventRow) => void;
   onDelete: (e: AdminEventRow) => void;
+  emptyMessage?: string;
 }) {
   return (
     <div className={ADMIN_CARD}>
@@ -128,7 +130,7 @@ export function AdminEventsTable({
             {events.length === 0 ? (
               <tr>
                 <td colSpan={HEADERS.length} className="px-6 py-16 text-center text-[#64748b]">
-                  No events match your filters.
+                  {emptyMessage}
                 </td>
               </tr>
             ) : (

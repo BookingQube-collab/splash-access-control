@@ -92,3 +92,15 @@ export function eventOverlapsFilter(
   const fe = filterEnd ? parseISO(filterEnd) : end;
   return !isAfter(startOfDay(start), startOfDay(fe)) && !isBefore(startOfDay(end), startOfDay(fs));
 }
+
+/** Expand filter range so an event remains visible after edit. */
+export function mergeFilterRangeForEvent(
+  filterStart: string,
+  filterEnd: string,
+  eventStart: string,
+  eventEnd: string,
+): { start: string; end: string } {
+  const start = filterStart && eventStart ? (filterStart < eventStart ? filterStart : eventStart) : eventStart || filterStart;
+  const end = filterEnd && eventEnd ? (filterEnd > eventEnd ? filterEnd : eventEnd) : eventEnd || filterEnd;
+  return { start, end };
+}

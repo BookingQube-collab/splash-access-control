@@ -33,6 +33,7 @@ export function AdminBookingsFilters({
   onClearAll,
   hasActive,
   applying,
+  bulkDeleteSlot,
 }: {
   filters: AdminTableFilters;
   onFiltersChange: (patch: Partial<AdminTableFilters>) => void;
@@ -48,6 +49,7 @@ export function AdminBookingsFilters({
   onClearAll: () => void;
   hasActive: boolean;
   applying?: boolean;
+  bulkDeleteSlot?: React.ReactNode;
 }) {
   return (
     <div className="space-y-3">
@@ -162,26 +164,29 @@ export function AdminBookingsFilters({
             </span>
           </div>
 
-          {mode === "server" && (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={applying}
-                onClick={onApplyServer}
-                className="inline-flex h-9 items-center justify-center rounded-[12px] px-4 text-xs font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-60"
-                style={{ background: ADMIN_TEAL }}
-              >
-                {applying ? "Applying…" : "Apply Server Filter"}
-              </button>
-              <button
-                type="button"
-                onClick={onClearServer}
-                className="inline-flex h-9 items-center justify-center rounded-[12px] border border-[#e2e8f0] bg-white px-4 text-xs font-semibold text-[#334155] transition hover:bg-[#f8fafc]"
-              >
-                Clear Filters
-              </button>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {mode === "server" && (
+              <>
+                <button
+                  type="button"
+                  disabled={applying}
+                  onClick={onApplyServer}
+                  className="inline-flex h-9 items-center justify-center rounded-[12px] px-4 text-xs font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-60"
+                  style={{ background: ADMIN_TEAL }}
+                >
+                  {applying ? "Applying…" : "Apply Server Filter"}
+                </button>
+                <button
+                  type="button"
+                  onClick={onClearServer}
+                  className="inline-flex h-9 items-center justify-center rounded-[12px] border border-[#e2e8f0] bg-white px-4 text-xs font-semibold text-[#334155] transition hover:bg-[#f8fafc]"
+                >
+                  Clear Filters
+                </button>
+              </>
+            )}
+            {bulkDeleteSlot}
+          </div>
         </div>
       </div>
 

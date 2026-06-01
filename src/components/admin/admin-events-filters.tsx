@@ -18,6 +18,7 @@ export function AdminEventsFilters({
   onStartChange,
   end,
   onEndChange,
+  onClearDates,
   onAdd,
   adding,
 }: {
@@ -28,15 +29,20 @@ export function AdminEventsFilters({
   onStartChange: (v: string) => void;
   end: string;
   onEndChange: (v: string) => void;
+  onClearDates?: () => void;
   onAdd: () => void;
   adding: boolean;
 }) {
+  const hasDateFilter = Boolean(start || end);
+
   return (
     <div className={cn(ADMIN_CARD, "p-5 sm:p-6")}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-4">
         <div className="grid min-w-0 flex-1 gap-4 sm:grid-cols-3">
           <div className="min-w-0">
-            <Label className="mb-1.5 block text-xs font-semibold text-[#64748b]">Event</Label>
+            <Label className="mb-1.5 block text-xs font-semibold text-[#64748b]">
+              New event name
+            </Label>
             <Input
               list="admin-event-names"
               value={name}
@@ -51,23 +57,36 @@ export function AdminEventsFilters({
             </datalist>
           </div>
           <div>
-            <Label className="mb-1.5 block text-xs font-semibold text-[#64748b]">Start date</Label>
+            <Label className="mb-1.5 block text-xs font-semibold text-[#64748b]">
+              Filter from
+            </Label>
             <Input
               type="date"
               value={start}
               onChange={(e) => onStartChange(e.target.value)}
               className={pillInput}
+              aria-label="Filter events from date"
             />
           </div>
           <div>
-            <Label className="mb-1.5 block text-xs font-semibold text-[#64748b]">End date</Label>
+            <Label className="mb-1.5 block text-xs font-semibold text-[#64748b]">Filter to</Label>
             <Input
               type="date"
               value={end}
-              min={start}
+              min={start || undefined}
               onChange={(e) => onEndChange(e.target.value)}
               className={pillInput}
+              aria-label="Filter events to date"
             />
+            {hasDateFilter && onClearDates ? (
+              <button
+                type="button"
+                onClick={onClearDates}
+                className="mt-1.5 text-xs font-semibold text-[#0d9488] hover:underline"
+              >
+                Show all dates
+              </button>
+            ) : null}
           </div>
         </div>
         <button

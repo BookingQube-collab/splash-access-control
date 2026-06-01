@@ -14,7 +14,9 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import type { AdminSlotRow } from "@/components/admin/admin-slots-utils";
 import { useAdminFilterOptions } from "@/components/admin/use-admin-filter-options";
 import { useAdminTableFilters } from "@/hooks/use-admin-table-filters";
+import { AdminDeleteAllRegistrationsDialog, AdminDeleteAllRegistrationsTrigger } from "@/components/admin/admin-delete-all-registrations-dialog";
 import {
+  adminDeleteAllRegistrations,
   adminDeleteRegistration,
   adminListEvents,
   adminListRegistrations,
@@ -53,6 +55,8 @@ export function AdminBookingsSection() {
   const [editRow, setEditRow] = useState<AdminRegistrationRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [deleteAllScope, setDeleteAllScope] = useState<"all" | "filtered">("all");
 
   const serverFilterPayload = useMemo(() => toServerFilters(serverFilters), [serverFilters]);
 
@@ -155,6 +159,37 @@ export function AdminBookingsSection() {
     void qc.invalidateQueries({ queryKey: ["a-regs-stats"] });
     void qc.invalidateQueries({ queryKey: ["a-regs-local"] });
     void qc.invalidateQueries({ queryKey: ["a-slots"] });
+    void qc.invalidateQueries({ queryKey: ["a-reg-slot-totals"] });
+    void qc.invalidateQueries({ queryKey: ["admin-overview"] });
+  };
+
+  const hasFilterScope = useMemo(() => {
+    const f = serverFilters;
+    return Boolean(
+      f.search?.trim() ||
+        f.eventId ||
+        f.slotId ||
+        f.status ||
+        f.dateFrom ||
+        f.dateTo,
+    );
+  }, [serverFilters]);
+
+  const openBulkDelete = (scope: "all" | "filtered") => {
+    setDeleteAllScope(scope);
+    setDeleteAllOpen(true);
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    const res = await adminDeleteAllRegistrations({
+      confirmPhrase: "DELETE ALL",
+      scope: deleteAllScope,
+      filters: deleteAllScope === "filtered" ? serverFilterPayload : undefined,
+    });
+    toast.success(`Deleted ${res.deleted.toLocaleString()} registration(s)`);
+    setPage(1);
+    invalidateRegistrations();
+    await refetch();
   };
 
   const handleSaveEdit = async (form: BookingEditForm) => {
@@ -340,6 +375,30 @@ export function AdminBookingsSection() {
             ? isFetching || statsFetching
             : localBulkFetching
         }
+        bulkDeleteSlot={
+          <div className="flex flex-wrap items-center gap-2">
+            {hasFilterScope && tableFilters.mode === "server" ? (
+              <AdminDeleteAllRegistrationsTrigger
+                variant="filtered"
+                label={`Delete filtered (${total.toLocaleString()})`}
+                onClick={() => openBulkDelete("filtered")}
+              />
+            ) : null}
+            <AdminDeleteAllRegistrationsTrigger
+              variant="all"
+              label="Delete all registrations"
+              onClick={() => openBulkDelete("all")}
+            />
+          </div>
+        }
+      />
+
+      <AdminDeleteAllRegistrationsDialog
+        open={deleteAllOpen}
+        onOpenChange={setDeleteAllOpen}
+        scope={deleteAllScope}
+        matchCount={deleteAllScope === "filtered" ? total : stats.total}
+        onConfirm={handleBulkDeleteConfirm}
       />
 
       <AdminBookingsTable

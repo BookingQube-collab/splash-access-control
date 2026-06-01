@@ -34,6 +34,7 @@ import {
   formatEventDateRange,
   eventDateRange,
   eventOverlapsFilter,
+  mergeFilterRangeForEvent,
   slotTotalCapacity,
   type AdminEventRow,
 } from "@/components/admin/admin-events-utils";
@@ -56,8 +57,8 @@ export function AdminEventsSection() {
   const qc = useQueryClient();
   const today = new Date().toISOString().slice(0, 10);
   const [name, setName] = useState("SummerSplash");
-  const [filterStart, setFilterStart] = useState("2026-05-01");
-  const [filterEnd, setFilterEnd] = useState("2026-05-31");
+  const [filterStart, setFilterStart] = useState("");
+  const [filterEnd, setFilterEnd] = useState("");
   const [createStart, setCreateStart] = useState(today);
   const [createEnd, setCreateEnd] = useState(today);
   const [page, setPage] = useState(1);
@@ -136,18 +137,25 @@ export function AdminEventsSection() {
   });
 
   const editMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!editEvent) throw new Error("No event selected");
-      return adminUpsertEvent({
+      const start = editStart;
+      const end = editEnd;
+      await adminUpsertEvent({
         id: editEvent.id,
         name: editName.trim(),
-        start_date: editStart,
-        end_date: editEnd,
+        start_date: start,
+        end_date: end,
         is_active: editActive,
       });
+      return { start, end };
     },
-    onSuccess: () => {
+    onSuccess: ({ start, end }) => {
       toast.success("Event updated");
+      const nextRange = mergeFilterRangeForEvent(filterStart, filterEnd, start, end);
+      setFilterStart(nextRange.start);
+      setFilterEnd(nextRange.end);
+      setPage(1);
       qc.invalidateQueries({ queryKey: ["a-events"] });
       setEditEvent(null);
     },
@@ -189,6 +197,28 @@ export function AdminEventsSection() {
         subtitle="Create, manage and track all your events in one place."
       />
 
+      {events.length > 0 && filtered.length === 0 ? (
+        <div className="rounded-[14px] border border-[#fed7aa] bg-[#fff7ed] px-4 py-3 text-sm text-[#9a3412]">
+          <span className="font-semibold">{events.length} event(s)</span> exist but none overlap the
+          date filter
+          {filterStart || filterEnd
+            ? ` (${filterStart || "…"} – ${filterEnd || "…"})`
+            : ""}
+          .{" "}
+          <button
+            type="button"
+            className="font-semibold text-[#c2410c] underline hover:no-underline"
+            onClick={() => {
+              setFilterStart("");
+              setFilterEnd("");
+              setPage(1);
+            }}
+          >
+            Show all events
+          </button>
+        </div>
+      ) : null}
+
       <AdminEventsFilters
         events={events}
         name={name}
@@ -196,13 +226,16 @@ export function AdminEventsSection() {
         start={filterStart}
         onStartChange={(v) => {
           setFilterStart(v);
-          setCreateStart(v);
           setPage(1);
         }}
         end={filterEnd}
         onEndChange={(v) => {
           setFilterEnd(v);
-          setCreateEnd(v);
+          setPage(1);
+        }}
+        onClearDates={() => {
+          setFilterStart("");
+          setFilterEnd("");
           setPage(1);
         }}
         onAdd={() => {
@@ -225,6 +258,11 @@ export function AdminEventsSection() {
         onEdit={openEdit}
         onToggleActive={handleToggleActive}
         onDelete={handleDelete}
+        emptyMessage={
+          events.length === 0
+            ? "No events yet. Create one above."
+            : "No events match the date filter. Try Show all dates or widen the range."
+        }
       />
 
       <Dialog open={!!editEvent} onOpenChange={(open) => !open && setEditEvent(null)}>

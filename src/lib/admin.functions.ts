@@ -171,9 +171,11 @@ export async function adminUpsertEvent(input: z.infer<typeof eventSchema>) {
       is_active: data.is_active,
     };
     if (data.id) {
-    await supabase.from("events").update(payload).eq("id", data.id);
+      const { error } = await supabase.from("events").update(payload).eq("id", data.id);
+      if (error) throw new Error(error.message);
     } else {
-    await supabase.from("events").insert(payload);
+      const { error } = await supabase.from("events").insert(payload);
+      if (error) throw new Error(error.message);
     }
     return { ok: true };
 }
@@ -471,6 +473,86 @@ export async function adminDeleteRegistration(input: { id: string }) {
   if (error) throw new Error(error.message);
 
   return { ok: true };
+}
+
+const bulkDeleteRegistrationsSchema = z.object({
+  confirmPhrase: z.literal("DELETE ALL"),
+  scope: z.enum(["all", "filtered"]),
+  filters: z.record(z.string(), z.unknown()).optional(),
+});
+
+function registrationDeleteDb() {
+  const admin = getSupabaseAdminClientOrNull();
+  if (!admin) {
+    throw new Error(
+      "Bulk delete requires SUPABASE_SERVICE_ROLE_KEY. Add it under Admin → Settings → Supabase, then restart the server.",
+    );
+  }
+  return admin;
+}
+
+/** Collect registration ids matching list filters (for filtered bulk delete). */
+async function listRegistrationIdsForBulkDelete(
+  db: ReturnType<typeof registrationDeleteDb>,
+  parsed: ParsedRegistrationFilters,
+): Promise<string[]> {
+  const ids: string[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+
+  for (;;) {
+    const slotJoin = registrationSlotJoin(parsed);
+    let query = db.from("registrations").select(`id, ${slotJoin}(event_id)`);
+    query = applyRegistrationListFilters(query, parsed);
+    const { data, error } = await query.range(offset, offset + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as { id: string }[];
+    if (batch.length === 0) break;
+    ids.push(...batch.map((r) => r.id));
+    if (batch.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return ids;
+}
+
+async function deleteRegistrationIdsInBatches(
+  db: ReturnType<typeof registrationDeleteDb>,
+  ids: string[],
+): Promise<number> {
+  const chunkSize = 500;
+  let deleted = 0;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    const { error } = await db.from("registrations").delete().in("id", chunk);
+    if (error) throw new Error(error.message);
+    deleted += chunk.length;
+  }
+  return deleted;
+}
+
+/** Permanently delete registrations (all rows or current filter set). Admin only. */
+export async function adminDeleteAllRegistrations(
+  input: z.infer<typeof bulkDeleteRegistrationsSchema>,
+) {
+  const data = bulkDeleteRegistrationsSchema.parse(input);
+  await adminContext();
+  const db = registrationDeleteDb();
+
+  if (data.scope === "all") {
+    const { error, count } = await db
+      .from("registrations")
+      .delete({ count: "exact" })
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+    if (error) throw new Error(error.message);
+    return { ok: true, deleted: count ?? 0 };
+  }
+
+  const parsed = adminListFiltersSchema.parse(data.filters ?? {});
+  const ids = await listRegistrationIdsForBulkDelete(db, parsed);
+  if (ids.length === 0) return { ok: true, deleted: 0 };
+  const deleted = await deleteRegistrationIdsInBatches(db, ids);
+  return { ok: true, deleted };
 }
 
 // ===== Settings =====
