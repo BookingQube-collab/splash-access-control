@@ -32,6 +32,55 @@ export function formatSlotTimePart(value: string | Date): string {
   return format(d, pattern).toLowerCase();
 }
 
+/** Venue calendar zone for server-side labels (BookingQube, emails). Defaults to Qatar. */
+export function getSplashDisplayTimeZone(): string {
+  return process.env.SPLASH_DISPLAY_TIMEZONE?.trim() || "Asia/Qatar";
+}
+
+/** Wall-clock slot time in a fixed IANA zone (matches guest/POS UI regardless of server TZ). */
+export function formatSlotTimePartInZone(
+  value: string | Date,
+  timeZone: string = getSplashDisplayTimeZone(),
+): string {
+  const d = parseSlotInstant(value);
+  if (!d) return "";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "numeric",
+    hour12: true,
+  }).formatToParts(d);
+  const hour = parts.find((p) => p.type === "hour")?.value;
+  const minute = parts.find((p) => p.type === "minute")?.value;
+  const dayPeriod = parts.find((p) => p.type === "dayPeriod")?.value?.toLowerCase();
+  if (!hour || !dayPeriod) return "";
+  const minNum = minute ? Number(minute) : 0;
+  if (minNum === 0) return `${hour} ${dayPeriod}`;
+  return `${hour}:${String(minNum).padStart(2, "0")} ${dayPeriod}`;
+}
+
+/** Combined range in venue zone, e.g. `4 pm – 6 pm`. */
+export function formatSlotTimeRangeInZone(
+  startsAt: string | Date,
+  endsAt?: string | Date | null,
+  timeZone: string = getSplashDisplayTimeZone(),
+): string {
+  const start = formatSlotTimePartInZone(startsAt, timeZone);
+  if (endsAt === undefined || endsAt === null) return start;
+  const end = formatSlotTimePartInZone(endsAt, timeZone);
+  if (!start) return end;
+  if (!end) return start;
+  return `${start} – ${end}`;
+}
+
+/** Server outbound labels (BookingQube sync, emails) — always venue wall clock. */
+export function formatVenueSlotTimeRange(
+  startsAt: string | Date,
+  endsAt?: string | Date | null,
+): string {
+  return formatSlotTimeRangeInZone(startsAt, endsAt);
+}
+
 /** Combined range, e.g. `4 pm – 6 pm`. */
 export function formatSlotTimeRange(
   startsAt: string | Date,
@@ -165,12 +214,18 @@ export function formatSlotDisplayLabel(
   name?: string | null,
   startsAt?: string | null,
   endsAt?: string | null,
+  opts?: { timeZone?: string },
 ): string {
+  const tz = opts?.timeZone;
   const range =
     startsAt && endsAt
-      ? formatSlotTimeRange(startsAt, endsAt)
+      ? tz
+        ? formatSlotTimeRangeInZone(startsAt, endsAt, tz)
+        : formatSlotTimeRange(startsAt, endsAt)
       : startsAt
-        ? formatSlotTimePart(startsAt)
+        ? tz
+          ? formatSlotTimePartInZone(startsAt, tz)
+          : formatSlotTimePart(startsAt)
         : "";
   const n = name?.trim() ?? "";
   if (n && range) return `${n} · ${range}`;

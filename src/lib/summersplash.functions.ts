@@ -15,7 +15,16 @@ import {
 import { countActionableInvalidScans } from "@/lib/scan-metrics";
 import { isSlotPastForDate } from "@/lib/slot-time";
 import { localCalendarDayBoundsIso } from "@/lib/date-bounds";
-import { clampBookingDate, eventDateRange, formatYmd, maxYmd, normalizePhoneForLookup, parseYmd, todayYmd } from "@/lib/utils";
+import {
+  clampBookingDate,
+  eventDateRange,
+  formatYmd,
+  maxYmd,
+  normalizePhoneForLookup,
+  parseYmd,
+  registrationCreatedAtForBookingDay,
+  todayYmd,
+} from "@/lib/utils";
 
 const publicEventSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -271,9 +280,7 @@ export async function publicRegister(input: z.infer<typeof registerSchema>) {
     throw new Error("Slot is full");
   }
 
-  const createdAt = bookingDate
-    ? new Date(`${bookingDate}T12:00:00`).toISOString()
-    : new Date().toISOString();
+  const createdAt = registrationCreatedAtForBookingDay(bookingDate ?? todayYmd());
 
   const { data: reg, error } = await supabaseAdmin
       .from("registrations")
@@ -1004,21 +1011,9 @@ async function scheduleRegistrationPassEmail(registrationId: string, email: stri
 export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
   const data = posRegisterSchema.parse(input);
   const { supabase, userId } = await getAuthContext();
-  const since = new Date(Date.now() - 30_000).toISOString();
   const bookingDate = data.booking_date;
 
-  const [{ data: slot }, { data: dupe }] = await Promise.all([
-    supabase.from("slots").select("*").eq("id", data.slot_id).maybeSingle(),
-    supabase
-      .from("registrations")
-      .select("id, qr_token")
-      .eq("slot_id", data.slot_id)
-      .eq("mobile", data.mobile)
-      .gte("created_at", since)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
+  const { data: slot } = await supabase.from("slots").select("*").eq("id", data.slot_id).maybeSingle();
 
   if (!slot) throw new Error("Slot not found");
   if (slot.hidden_from_booking) throw new Error("This slot is not available for booking");
@@ -1030,40 +1025,10 @@ export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
 
   const { scheduleBookingQubeOutboundSync } = await import("@/lib/bookingqube.sync");
 
-  if (dupe) {
-    const { data: updatedDupe, error: dupeUpdateError } = await supabase
-      .from("registrations")
-      .update({
-        customer_name: data.customer_name,
-        guest_count: data.guest_count,
-        email: data.email || null,
-      })
-      .eq("id", dupe.id)
-      .select("id, qr_token, status, created_at, customer_name, guest_count, mobile")
-      .single();
-    if (dupeUpdateError) throw new Error(dupeUpdateError.message);
-    scheduleBookingQubeOutboundSync(dupe.id);
-    if (data.email?.trim() && !data.skip_email) {
-      await scheduleRegistrationPassEmail(dupe.id, data.email.trim());
-    }
-    let checkIn: Awaited<ReturnType<typeof recordEntryCheckIn>> | undefined;
-    if (data.auto_check_in) {
-      checkIn = await recordEntryCheckIn(
-        supabase,
-        userId,
-        updatedDupe as EntryCheckInReg,
-        slot as EntryCheckInSlot,
-        { skipPassValidation: true },
-      );
-    }
-    return { id: dupe.id, qr_token: dupe.qr_token, checkIn };
-  }
-
   const used = await sumGuests(supabase, data.slot_id, bookingDate);
   if (used + data.guest_count > slot.capacity) throw new Error("Slot is full");
 
-  // For advance/back-dated bookings, anchor created_at to noon of that date (keeps per-day capacity correct)
-  const createdAt = bookingDate ? new Date(`${bookingDate}T12:00:00`).toISOString() : new Date().toISOString();
+  const createdAt = registrationCreatedAtForBookingDay(bookingDate ?? todayYmd());
 
   const { data: reg, error } = await supabase.from("registrations").insert({
     slot_id: data.slot_id,

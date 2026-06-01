@@ -14,7 +14,7 @@ import {
 import { getEmailSiteOrigin, emailMyPassesDownloadUrl, passUrl } from "@/lib/public-url";
 import { registrationBookingYmd } from "@/lib/pass-active";
 import { parseYmd } from "@/lib/utils";
-import { formatSlotTimeRange } from "@/lib/slot-time";
+import { formatSlotDisplayLabel, getSplashDisplayTimeZone } from "@/lib/slot-time";
 
 const MAILGUN_LOG = "[mailgun]";
 const MAIL_LOG = "[mail]";
@@ -276,10 +276,11 @@ function formatEmailSlotLabel(
   slotStartsAt?: string | null,
   slotEndsAt?: string | null,
 ): string {
-  if (slotStartsAt && slotEndsAt) {
-    return formatSlotTimeRange(slotStartsAt, slotEndsAt).replace(/\b(am|pm)\b/g, (m) =>
-      m.toUpperCase(),
-    );
+  const label = formatSlotDisplayLabel(slotName, slotStartsAt, slotEndsAt, {
+    timeZone: getSplashDisplayTimeZone(),
+  });
+  if (label) {
+    return label.replace(/\b(am|pm)\b/g, (m) => m.toUpperCase());
   }
   return slotName?.trim() || "Your slot";
 }

@@ -75,7 +75,12 @@ import {
 
 import { after } from "next/server";
 
-import { formatSlotDisplayLabel, formatSlotTimeRange } from "@/lib/slot-time";
+import { registrationBookingYmd } from "@/lib/pass-active";
+import {
+  formatSlotDisplayLabel,
+  formatVenueSlotTimeRange,
+  getSplashDisplayTimeZone,
+} from "@/lib/slot-time";
 
 
 
@@ -306,12 +311,21 @@ type RegistrationRow = {
 
 
 function bookingDateFromRegistration(reg: RegistrationRow): string {
-
-  return reg.created_at.slice(0, 10);
-
+  return registrationBookingYmd(reg.created_at);
 }
 
-
+function registrationSlot(reg: RegistrationRow): RegistrationRow["slots"] {
+  const slot = reg.slots;
+  if (!slot) return null;
+  if (slot.id && reg.slot_id && slot.id !== reg.slot_id) {
+    bqLog("Slot join id mismatch — using registration slot_id", {
+      registrationId: reg.id,
+      slot_id: reg.slot_id,
+      joined_slot_id: slot.id,
+    });
+  }
+  return slot;
+}
 
 function localValue(reg: RegistrationRow, localField: string): string | number | null {
 
@@ -342,15 +356,17 @@ function localValue(reg: RegistrationRow, localField: string): string | number |
       return reg.slot_id;
 
     case "slot_name": {
-      const slot = reg.slots;
+      const slot = registrationSlot(reg);
       if (!slot) return "";
-      return formatSlotDisplayLabel(slot.name, slot.starts_at, slot.ends_at);
+      return formatSlotDisplayLabel(slot.name, slot.starts_at, slot.ends_at, {
+        timeZone: getSplashDisplayTimeZone(),
+      });
     }
 
     case "slot_time": {
-      const slot = reg.slots;
+      const slot = registrationSlot(reg);
       if (!slot?.starts_at) return "";
-      return formatSlotTimeRange(slot.starts_at, slot.ends_at);
+      return formatVenueSlotTimeRange(slot.starts_at, slot.ends_at);
     }
 
     case "event_name":

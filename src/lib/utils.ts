@@ -17,6 +17,17 @@ export function formatYmd(date: Date): string {
   return format(date, "yyyy-MM-dd");
 }
 
+/**
+ * `created_at` for a new registration: booking calendar day + current clock time.
+ * Keeps per-day slot capacity correct while every POS/web checkout gets a distinct timestamp.
+ */
+export function registrationCreatedAtForBookingDay(bookingYmd: string): string {
+  const now = new Date();
+  const day = parseYmd(bookingYmd);
+  day.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+  return day.toISOString();
+}
+
 /** Days shown in the POS horizontal date strip (calendar covers the rest). */
 export const POS_STRIP_DAY_COUNT = 7;
 

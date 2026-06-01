@@ -279,7 +279,7 @@ const LOCAL_FIELD_LABEL_HINTS: Record<LocalRegistrationField, string[]> = {
   booking_date: ["date", "visit date", "booking date", "day"],
   slot_id: ["slot id", "slot_id", "time slot id"],
   slot_time: ["slot time", "time range", "start time", "end time", "time"],
-  slot_name: ["slot", "session", "timeslot", "slot name"],
+  slot_name: ["session", "timeslot", "slot name"],
   event_name: ["event name", "event", "experience", "activity"],
   bookingqube_ticket_id: ["ticket", "ticket id", "product", "package"],
   qr_token: ["qr", "token", "barcode", "code"],
@@ -324,7 +324,15 @@ export function guessLocalFieldFromBookingQubeField(field: {
   if (l.includes("guest")) return "guest_count";
   if (l.includes("date")) return "booking_date";
   if (l.includes("event")) return "event_name";
-  if (l.includes("slot") || l.includes("ticket")) return "bookingqube_ticket_id";
+  if (l.includes("ticket")) return "bookingqube_ticket_id";
+  if (
+    l === "slot" ||
+    l.includes("slot time") ||
+    (l.includes("slot") && (l.includes("time") || l.includes("start") || l.includes("end")))
+  ) {
+    return "slot_time";
+  }
+  if (l.includes("slot")) return "slot_name";
   return "metadata";
 }
 
