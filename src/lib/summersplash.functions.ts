@@ -205,19 +205,46 @@ export async function getScannerTodaySlots(input?: { date?: string }) {
   };
 }
 
+function slotBookingDayBounds(dateStr?: string) {
+  const dayStart = dateStr
+    ? new Date(`${dateStr}T00:00:00`)
+    : (() => {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d;
+      })();
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+  return { dayStart, dayEnd };
+}
+
 // Sum of guest_count for a slot in active/entered status — for a specific day (per-day capacity)
 async function sumGuests(client: any, slotId: string, dateStr?: string) {
-  const dayStart = dateStr ? new Date(`${dateStr}T00:00:00`) : (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
-  const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
-  const { data } = await client
+  const { dayStart, dayEnd } = slotBookingDayBounds(dateStr);
+  const { data, error } = await client
+    .from("registrations")
+    .select("guest_count.sum()")
+    .eq("slot_id", slotId)
+    .in("status", ["active", "entered"])
+    .gte("created_at", dayStart.toISOString())
+    .lt("created_at", dayEnd.toISOString())
+    .maybeSingle();
+  if (!error && data != null) {
+    const sum = (data as { sum?: number | string | null }).sum;
+    if (sum != null) return Number(sum) || 0;
+  }
+  const { data: rows } = await client
     .from("registrations")
     .select("guest_count")
     .eq("slot_id", slotId)
     .in("status", ["active", "entered"])
     .gte("created_at", dayStart.toISOString())
     .lt("created_at", dayEnd.toISOString());
-  return (data ?? []).reduce((sum: number, r: any) => sum + (r.guest_count ?? 1), 0);
+  return (rows ?? []).reduce((sum: number, r: { guest_count?: number | null }) => sum + (r.guest_count ?? 1), 0);
 }
+
+const POS_SLOT_COLUMNS =
+  "id, name, capacity, hidden_from_booking, starts_at, ends_at" as const;
 
 // ============ PUBLIC: register a customer ============
 const registerSchema = z.object({
@@ -1012,13 +1039,15 @@ function scheduleRegistrationPassEmail(registrationId: string, email: string) {
 // ============ POS ============
 export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
   const data = posRegisterSchema.parse(input);
-  const { supabase, userId } = await getAuthContext();
   const bookingDate = data.booking_date;
 
-  const [{ data: slot }, used] = await Promise.all([
-    supabase.from("slots").select("*").eq("id", data.slot_id).maybeSingle(),
-    sumGuests(supabase, data.slot_id, bookingDate),
+  const [auth, slotRes, used] = await Promise.all([
+    getAuthContext(),
+    supabaseAdmin.from("slots").select(POS_SLOT_COLUMNS).eq("id", data.slot_id).maybeSingle(),
+    sumGuests(supabaseAdmin, data.slot_id, bookingDate),
   ]);
+  const { userId } = auth;
+  const slot = slotRes.data;
 
   if (!slot) throw new Error("Slot not found");
   if (slot.hidden_from_booking) throw new Error("This slot is not available for booking");
@@ -1032,20 +1061,23 @@ export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
 
   const createdAt = registrationCreatedAtForBookingDay(bookingDate ?? todayYmd());
 
-  const { data: reg, error } = await supabase.from("registrations").insert({
-    slot_id: data.slot_id,
-    customer_name: data.customer_name,
-    mobile: data.mobile,
-    email: data.email || null,
-    guest_count: data.guest_count,
-    created_at: createdAt,
-  })
+  const { data: reg, error } = await supabaseAdmin
+    .from("registrations")
+    .insert({
+      slot_id: data.slot_id,
+      customer_name: data.customer_name,
+      mobile: data.mobile,
+      email: data.email || null,
+      guest_count: data.guest_count,
+      created_at: createdAt,
+    })
     .select("id, qr_token, status, created_at, customer_name, guest_count, mobile")
     .single();
   if (error) throw new Error(error.message);
 
-  const { scheduleBookingQubeOutboundSync } = await import("@/lib/bookingqube.sync");
-  scheduleBookingQubeOutboundSync(reg.id);
+  void import("@/lib/bookingqube.sync").then(({ scheduleBookingQubeOutboundSync }) => {
+    scheduleBookingQubeOutboundSync(reg.id);
+  });
   if (data.email?.trim() && !data.skip_email) {
     scheduleRegistrationPassEmail(reg.id, data.email.trim());
   }
@@ -1054,7 +1086,7 @@ export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
     const slotForCheckIn = slot as EntryCheckInSlot;
     after(async () => {
       try {
-        await recordEntryCheckIn(supabase, userId, regForCheckIn, slotForCheckIn, {
+        await recordEntryCheckIn(supabaseAdmin, userId, regForCheckIn, slotForCheckIn, {
           skipPassValidation: true,
         });
       } catch (err) {

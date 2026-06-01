@@ -575,9 +575,9 @@ function POS() {
         auto_check_in: autoScanAfterRegister,
         skip_email: defaultGuestDetails,
       });
+      setConfirmOpen(false);
       setLastToken(res.qr_token);
       setModalMeta({ name: displayName, slot: slot.name, guests });
-      setConfirmOpen(false);
       setPassModalAutoDismiss(true);
       setModalOpen(true);
       toast.success("Registered ✓");
@@ -597,7 +597,7 @@ function POS() {
       }
       setGuests(1);
       if (!defaultGuestDetails) setSlotId("");
-      refetch();
+      void refetch();
       if (autoScanAfterRegister) {
         toast.success("Checked in at entry");
       }
