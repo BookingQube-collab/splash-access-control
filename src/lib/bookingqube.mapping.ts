@@ -74,7 +74,30 @@ function parseSchemaFieldList(raw: unknown): BookingQubeSchemaField[] {
       undefined;
     out.push({ id, label, type, name });
   }
-  return out;
+  return dedupeSchemaFieldsByLabel(out);
+}
+
+/** When the API returns duplicate labels with different ids, keep the highest numeric id (newer revision). */
+export function dedupeSchemaFieldsByLabel(
+  fields: BookingQubeSchemaField[],
+): BookingQubeSchemaField[] {
+  const byLabel = new Map<string, BookingQubeSchemaField>();
+  for (const field of fields) {
+    const key = normalizeToken(field.label) || field.id;
+    const existing = byLabel.get(key);
+    if (!existing) {
+      byLabel.set(key, field);
+      continue;
+    }
+    const nextNum = /^\d+$/.test(field.id) ? Number(field.id) : 0;
+    const existingNum = /^\d+$/.test(existing.id) ? Number(existing.id) : 0;
+    if (nextNum >= existingNum) {
+      byLabel.set(key, field);
+    }
+  }
+  return Array.from(byLabel.values()).sort((a, b) =>
+    formatBookingQubeFieldOption(a).localeCompare(formatBookingQubeFieldOption(b)),
+  );
 }
 
 function cachedRegistrationFormFields(root: Record<string, unknown>): unknown {
@@ -140,23 +163,82 @@ export function formatBookingQubeFieldOption(field: BookingQubeSchemaField): str
   return `${field.id} — ${label}`;
 }
 
-/** Schema fields plus any mapped ids missing from the last fetch (stale/orphan rows). */
+/** Dropdown options from the latest fetched schema only (no stale mapped ids). */
+export function schemaFieldOptionsFromFetch(
+  schemaFields: BookingQubeSchemaField[],
+): BookingQubeSchemaField[] {
+  return dedupeSchemaFieldsByLabel(schemaFields);
+}
+
+/**
+ * @deprecated Prefer schemaFieldOptionsFromFetch — merging old mapping ids pollutes the dropdown.
+ */
 export function mergeSchemaFieldOptions(
   schemaFields: BookingQubeSchemaField[],
   mappings: { bookingqube_field_id?: string; bookingqube_label?: string }[],
 ): BookingQubeSchemaField[] {
-  const byId = new Map(schemaFields.map((f) => [f.id, f]));
-  for (const m of mappings) {
-    const id = m.bookingqube_field_id?.trim();
-    if (!id || byId.has(id)) continue;
-    byId.set(id, {
-      id,
-      label: m.bookingqube_label?.trim() || id,
-    });
-  }
-  return Array.from(byId.values()).sort((a, b) =>
-    formatBookingQubeFieldOption(a).localeCompare(formatBookingQubeFieldOption(b)),
+  return schemaFieldOptionsFromFetch(schemaFields);
+}
+
+function pickSchemaFieldForLocal(
+  schemaFields: BookingQubeSchemaField[],
+  local: string,
+): BookingQubeSchemaField | undefined {
+  const matches = schemaFields.filter(
+    (f) => guessLocalFieldFromBookingQubeField(f) === local,
   );
+  if (matches.length === 0) return undefined;
+  if (matches.length === 1) return matches[0];
+  return [...matches].sort((a, b) => Number(b.id) - Number(a.id))[0];
+}
+
+/** Re-map local fields to the latest schema after fetch — drops stale BookingQube field ids. */
+export function refreshFieldMappingsFromFetchedSchema(
+  existingMappings: BookingQubeFieldMapping[],
+  schemaFields: BookingQubeSchemaField[],
+): BookingQubeFieldMapping[] {
+  const schema = dedupeSchemaFieldsByLabel(schemaFields);
+  if (!schema.length) return [];
+
+  const baseRows =
+    existingMappings.length > 0
+      ? existingMappings
+      : autoMapSchemaFieldsToLocal(schema).map(({ bqId, bqLabel, local }) => ({
+          bookingqube_field_id: bqId,
+          bookingqube_label: bqLabel,
+          local_field: local,
+        }));
+
+  return baseRows.map((m) => {
+    const local = m.local_field?.trim();
+    if (!local) {
+      return { ...m, bookingqube_field_id: "", bookingqube_label: "" };
+    }
+
+    const byLocal = pickSchemaFieldForLocal(schema, local);
+    if (byLocal) {
+      return {
+        local_field: local,
+        bookingqube_field_id: byLocal.id,
+        bookingqube_label: byLocal.label,
+      };
+    }
+
+    const byLabel = schema.find((f) => labelMatches(f.label, m.bookingqube_label));
+    if (byLabel) {
+      return {
+        local_field: local,
+        bookingqube_field_id: byLabel.id,
+        bookingqube_label: byLabel.label,
+      };
+    }
+
+    return {
+      local_field: local,
+      bookingqube_field_id: "",
+      bookingqube_label: "",
+    };
+  });
 }
 
 export type BookingQubeRegistrationCell = {

@@ -50,12 +50,13 @@ import {
   LOCAL_REGISTRATION_FIELDS,
 } from "@/lib/bookingqube.constants";
 import {
-  autoMapSchemaFieldsToLocal,
+  dedupeSchemaFieldsByLabel,
   formatBookingQubeFieldOption,
   formatFieldErrorLine,
-  mergeSchemaFieldOptions,
   parseCachedFormSchemaMeta,
   parseBookingQubeSubmitErrors,
+  refreshFieldMappingsFromFetchedSchema,
+  schemaFieldOptionsFromFetch,
   schemaHasEventMetadata,
   slugifyEventName,
   urlTemplateNeedsFormContext,
@@ -310,7 +311,7 @@ export const AdminSettingsBookingQubeCard = forwardRef<
       setPostApiUrl(s.post_api_url?.trim() ?? "");
       const cached = parseCachedFormSchemaMeta(s.cached_form_schema);
       if (cached.fields.length > 0) {
-        setSchemaFields(cached.fields);
+        setSchemaFields(dedupeSchemaFieldsByLabel(cached.fields));
       }
       if (schemaHasEventMetadata(cached)) {
         setSchemaEventMeta({
@@ -371,16 +372,23 @@ export const AdminSettingsBookingQubeCard = forwardRef<
     }
     void adminGetBookingQubeFieldMappings({ event_mapping_id: selectedMapping.id })
       .then((res) => {
+        const rows = (res.mappings ?? []).map((m) => ({
+          bookingqube_field_id: m.bookingqube_field_id?.trim() ?? "",
+          bookingqube_label: m.bookingqube_label,
+          local_field: m.local_field,
+        }));
         setFieldMappings(
-          (res.mappings ?? []).map((m) => ({
-            bookingqube_field_id: m.bookingqube_field_id?.trim() ?? "",
-            bookingqube_label: m.bookingqube_label,
-            local_field: m.local_field,
-          })),
+          schemaFields.length > 0
+            ? refreshFieldMappingsFromFetchedSchema(rows, schemaFields).map((m) => ({
+                bookingqube_field_id: m.bookingqube_field_id ?? "",
+                bookingqube_label: m.bookingqube_label ?? "",
+                local_field: m.local_field,
+              }))
+            : rows,
         );
       })
       .catch(() => setFieldMappings([]));
-  }, [selectedMapping?.id]);
+  }, [selectedMapping?.id, schemaFields]);
 
   const saveGlobalSettings = async () => {
     if (!getApiUrl.trim() || !postApiUrl.trim()) {
@@ -506,7 +514,8 @@ export const AdminSettingsBookingQubeCard = forwardRef<
         post_api_url: postApiUrl.trim() || undefined,
         ...apiKeyPayload(),
       });
-      const fields = res.fields ?? res.schema.fields ?? [];
+      const rawFields = res.fields ?? res.schema.fields ?? [];
+      const fields = dedupeSchemaFieldsByLabel(rawFields);
       const eventId = res.eventId ?? res.schema.eventId ?? null;
       const slug = res.slug ?? res.schema.slug ?? null;
       const title = res.schema.title ?? null;
@@ -522,18 +531,31 @@ export const AdminSettingsBookingQubeCard = forwardRef<
       if (getUrlNeedsFormId && slug?.trim()) {
         setFormId(slug.trim());
       }
-      if (
-        fields.length > 0 &&
-        (fieldMappings.length === 0 ||
-          fieldMappings.every((m) => !m.bookingqube_field_id?.trim()))
-      ) {
-        setFieldMappings(
-          autoMapSchemaFieldsToLocal(fields).map((m) => ({
-            bookingqube_field_id: m.bqId,
-            bookingqube_label: m.bqLabel,
-            local_field: m.local,
-          })),
+      if (fields.length > 0) {
+        const refreshed = refreshFieldMappingsFromFetchedSchema(fieldMappings, fields).map(
+          (m) => ({
+            bookingqube_field_id: m.bookingqube_field_id ?? "",
+            bookingqube_label: m.bookingqube_label ?? "",
+            local_field: m.local_field,
+          }),
         );
+        setFieldMappings(refreshed);
+        if (tablesReady && selectedMapping?.id) {
+          try {
+            await adminSaveBookingQubeFieldMappings({
+              event_mapping_id: selectedMapping.id,
+              mappings: refreshed.map((m) => ({
+                bookingqube_field_id: m.bookingqube_field_id || null,
+                bookingqube_label: m.bookingqube_label || m.bookingqube_field_id || "field",
+                local_field: m.local_field,
+              })),
+            });
+          } catch (saveMapErr: unknown) {
+            toast.warning(
+              `Schema loaded but mappings could not be saved — ${formatActionError(saveMapErr)}. Click Save event link.`,
+            );
+          }
+        }
       }
       if (res.fieldsWarning) {
         toast.warning(res.fieldsWarning);
@@ -548,7 +570,7 @@ export const AdminSettingsBookingQubeCard = forwardRef<
         const idPart = eventId ? `, event id ${eventId}` : "";
         toast.success(
           count > 0
-            ? `Loaded ${count} field${count === 1 ? "" : "s"}${idPart}`
+            ? `Loaded ${count} field${count === 1 ? "" : "s"}${idPart} — mappings updated to current schema ids`
             : eventId
               ? `Loaded event id ${eventId} — no form fields in response; map manually in Step 2`
               : "Fetched BookingQube form schema",
@@ -727,8 +749,8 @@ export const AdminSettingsBookingQubeCard = forwardRef<
     Boolean(getApiUrl.trim()) &&
     (!getUrlNeedsFormId || Boolean(selectedEventId));
   const bqFieldOptions = useMemo(
-    () => mergeSchemaFieldOptions(schemaFields, fieldMappings),
-    [schemaFields, fieldMappings],
+    () => schemaFieldOptionsFromFetch(schemaFields),
+    [schemaFields],
   );
   const canPickBqFields = schemaReady || bqFieldOptions.length > 0;
   const hasSavedStyleMappings = fieldMappings.some(
