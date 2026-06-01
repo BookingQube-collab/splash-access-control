@@ -13,6 +13,9 @@ export const ADMIN_USERS_STALE_MS = 30_000;
 export const ADMIN_OVERVIEW_STALE_MS = 30_000;
 export const ADMIN_OVERVIEW_REFETCH_MS = 15_000;
 
+/** Bookings list/stats — poll while the tab is mounted; pause when the browser tab is hidden. */
+export const ADMIN_BOOKINGS_REFETCH_MS = 15_000;
+
 export const adminListQueryDefaults = {
   staleTime: ADMIN_LIST_STALE_MS,
   gcTime: 5 * 60_000,
@@ -39,6 +42,13 @@ export const adminOverviewQueryDefaults = {
   refetchInterval: ADMIN_OVERVIEW_REFETCH_MS,
   refetchOnWindowFocus: false,
   placeholderData: keepPreviousData,
+} as const;
+
+export const adminBookingsQueryDefaults = {
+  ...adminListQueryDefaults,
+  refetchInterval: ADMIN_BOOKINGS_REFETCH_MS,
+  refetchIntervalInBackground: false,
+  refetchOnWindowFocus: true,
 } as const;
 
 export function adminEventsQueryOptions<TData = Awaited<ReturnType<typeof import("@/lib/admin.functions").adminListEvents>>>(

@@ -28,7 +28,7 @@ import {
   adminResendDigitalPassEmail,
   adminUpdateRegistration,
 } from "@/lib/admin.functions";
-import { adminListQueryDefaults } from "@/lib/admin-query";
+import { adminBookingsQueryDefaults, adminListQueryDefaults } from "@/lib/admin-query";
 import { formatActionError, todayYmd } from "@/lib/utils";
 import {
   buildRegistrationFilterChips,
@@ -97,7 +97,7 @@ export function AdminBookingsSection() {
         pageSize: listPageSize,
       }),
     enabled: tableFilters.mode === "server",
-    ...adminListQueryDefaults,
+    ...adminBookingsQueryDefaults,
   });
 
   const rows = (data?.registrations ?? []) as unknown as AdminRegistrationRow[];
@@ -107,7 +107,7 @@ export function AdminBookingsSection() {
     queryKey: ["a-regs-stats", serverFilterPayload],
     queryFn: () => adminRegistrationBookingStats(serverFilterPayload),
     enabled: tableFilters.mode === "server",
-    ...adminListQueryDefaults,
+    ...adminBookingsQueryDefaults,
   });
 
   const { data: localBulkData, isFetching: localBulkFetching } = useQuery({
@@ -118,7 +118,7 @@ export function AdminBookingsSection() {
         pageSize: LOCAL_FETCH_LIMIT,
       }),
     enabled: tableFilters.mode === "local",
-    ...adminListQueryDefaults,
+    ...adminBookingsQueryDefaults,
   });
 
   const localRows = (localBulkData?.registrations ?? []) as unknown as AdminRegistrationRow[];
@@ -421,7 +421,11 @@ export function AdminBookingsSection() {
         isFetching={isFetching || localBulkFetching}
         dataUpdatedAt={dataUpdatedAt}
         onPageChange={setPage}
-        onRefresh={() => void refetch()}
+        onRefresh={() => {
+          void refetch();
+          void qc.invalidateQueries({ queryKey: ["a-regs-stats"] });
+          void qc.invalidateQueries({ queryKey: ["a-regs-local"] });
+        }}
         onEdit={setEditRow}
         onDelete={(row) => void handleDelete(row)}
         onResend={(row) => void handleResend(row)}
