@@ -8,7 +8,10 @@ import { AdminBookingsEditDialog, type BookingEditForm } from "@/components/admi
 import { AdminBookingsFilters } from "@/components/admin/admin-bookings-filters";
 import { AdminBookingsStats } from "@/components/admin/admin-bookings-stats";
 import { AdminBookingsTable } from "@/components/admin/admin-bookings-table";
-import { computeBookingStats } from "@/components/admin/admin-bookings-utils";
+import {
+  computeBookingStats,
+  sortRegistrationsNewestFirst,
+} from "@/components/admin/admin-bookings-utils";
 import { useAdminNavigation } from "@/components/admin/admin-navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import type { AdminSlotRow } from "@/components/admin/admin-slots-utils";
@@ -270,9 +273,10 @@ export function AdminBookingsSection() {
   const localFilteredRows = useMemo(() => {
     if (tableFilters.mode !== "local") return [];
     const local = { ...tableFilters.filters, search: tableFilters.debouncedSearch };
-    return localRows.filter((row) =>
+    const filtered = localRows.filter((row) =>
       filterRegistrationRow(row, local, tableFilters.debouncedSearch),
     );
+    return sortRegistrationsNewestFirst(filtered);
   }, [
     tableFilters.mode,
     localRows,
@@ -280,7 +284,13 @@ export function AdminBookingsSection() {
     tableFilters.debouncedSearch,
   ]);
 
-  const displayRows = tableFilters.mode === "server" ? rows : localFilteredRows;
+  const displayRows = useMemo(
+    () =>
+      tableFilters.mode === "server"
+        ? sortRegistrationsNewestFirst(rows)
+        : localFilteredRows,
+    [tableFilters.mode, rows, localFilteredRows],
+  );
 
   const stats = useMemo(() => {
     if (tableFilters.mode === "server" && statsData?.stats) {

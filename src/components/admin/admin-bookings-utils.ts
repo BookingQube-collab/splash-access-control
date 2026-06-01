@@ -23,6 +23,18 @@ const REGISTRATION_WHEN_FORMAT = "MMM d, yyyy, h:mm a";
  * WHEN column: real `created_at` when it carries a clock time; for capacity-anchored
  * noon timestamps, show booking day + slot start time instead of misleading 12:00 PM.
  */
+/** Newest registration first (table default). */
+export function sortRegistrationsNewestFirst(
+  rows: AdminRegistrationRow[],
+): AdminRegistrationRow[] {
+  return [...rows].sort((a, b) => {
+    const tb = Date.parse(b.created_at);
+    const ta = Date.parse(a.created_at);
+    if (Number.isFinite(tb) && Number.isFinite(ta) && tb !== ta) return tb - ta;
+    return b.id.localeCompare(a.id);
+  });
+}
+
 export function formatRegistrationWhen(
   createdAt: string,
   slotStartsAt?: string | null,

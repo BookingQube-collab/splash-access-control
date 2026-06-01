@@ -312,11 +312,9 @@ export async function adminListRegistrations(
   const to = from + pageSize - 1;
 
   const runList = (select: string) => {
-    let q = supabase
-      .from("registrations")
-      .select(select, { count: "exact" })
-      .order("created_at", { ascending: false });
+    let q = supabase.from("registrations").select(select, { count: "exact" });
     q = applyRegistrationListFilters(q, parsed);
+    q = q.order("created_at", { ascending: false }).order("id", { ascending: false });
     return q.range(from, to);
   };
 
