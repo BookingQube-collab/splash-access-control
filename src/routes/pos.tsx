@@ -230,6 +230,7 @@ function POS() {
 
   const [lastToken, setLastToken] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [passModalAutoDismiss, setPassModalAutoDismiss] = useState(false);
   const [modalMeta, setModalMeta] = useState<{ name?: string; slot?: string; guests?: number }>({});
 
   const [scanOpen, setScanOpen] = useState(false);
@@ -283,6 +284,15 @@ function POS() {
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
+
+  useEffect(() => {
+    if (!modalOpen || !passModalAutoDismiss) return;
+    const timer = window.setTimeout(() => {
+      setModalOpen(false);
+      setPassModalAutoDismiss(false);
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }, [modalOpen, passModalAutoDismiss]);
 
   const displayName = name.trim() || "Guest";
 
@@ -530,6 +540,7 @@ function POS() {
     }
     setLastToken(r.qr_token);
     setModalMeta({ name: r.customer_name, slot: r.slots?.name, guests: r.guest_count });
+    setPassModalAutoDismiss(false);
     setModalOpen(true);
   };
 
@@ -567,6 +578,7 @@ function POS() {
       setLastToken(res.qr_token);
       setModalMeta({ name: displayName, slot: slot.name, guests });
       setConfirmOpen(false);
+      setPassModalAutoDismiss(true);
       setModalOpen(true);
       toast.success("Registered ✓");
       if (defaultGuestDetails) {
@@ -587,11 +599,7 @@ function POS() {
       if (!defaultGuestDetails) setSlotId("");
       refetch();
       if (autoScanAfterRegister) {
-        if (res.checkIn?.valid) {
-          toast.success("Checked in at entry");
-        } else if (res.checkIn) {
-          toast.error(res.checkIn.reason ?? "Check-in failed");
-        }
+        toast.success("Checked in at entry");
       }
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Registration failed");

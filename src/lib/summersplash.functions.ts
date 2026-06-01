@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { z } from "zod";
 import { getAuthContext } from "@/lib/server-auth";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -270,7 +271,7 @@ export async function publicRegister(input: z.infer<typeof registerSchema>) {
     if (dupeUpdateError) throw new Error(dupeUpdateError.message);
     scheduleBookingQubeOutboundSync(dupe.id);
     if (data.email?.trim()) {
-      await scheduleRegistrationPassEmail(dupe.id, data.email.trim());
+      scheduleRegistrationPassEmail(dupe.id, data.email.trim());
     }
     return { id: dupe.id, qr_token: dupe.qr_token };
   }
@@ -297,7 +298,7 @@ export async function publicRegister(input: z.infer<typeof registerSchema>) {
     if (error) throw new Error(error.message);
     scheduleBookingQubeOutboundSync(reg.id);
     if (data.email?.trim()) {
-      await scheduleRegistrationPassEmail(reg.id, data.email.trim());
+      scheduleRegistrationPassEmail(reg.id, data.email.trim());
     }
     return { id: reg.id, qr_token: reg.qr_token };
 }
@@ -1002,9 +1003,10 @@ const posRegisterSchema = registerSchema.extend({
   skip_email: z.boolean().optional(),
 });
 
-async function scheduleRegistrationPassEmail(registrationId: string, email: string) {
-  const { scheduleDigitalPassEmail } = await import("@/lib/mailgun.server");
-  scheduleDigitalPassEmail(registrationId, { email });
+function scheduleRegistrationPassEmail(registrationId: string, email: string) {
+  void import("@/lib/mailgun.server").then(({ scheduleDigitalPassEmail }) => {
+    scheduleDigitalPassEmail(registrationId, { email });
+  });
 }
 
 // ============ POS ============
@@ -1013,7 +1015,10 @@ export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
   const { supabase, userId } = await getAuthContext();
   const bookingDate = data.booking_date;
 
-  const { data: slot } = await supabase.from("slots").select("*").eq("id", data.slot_id).maybeSingle();
+  const [{ data: slot }, used] = await Promise.all([
+    supabase.from("slots").select("*").eq("id", data.slot_id).maybeSingle(),
+    sumGuests(supabase, data.slot_id, bookingDate),
+  ]);
 
   if (!slot) throw new Error("Slot not found");
   if (slot.hidden_from_booking) throw new Error("This slot is not available for booking");
@@ -1023,9 +1028,6 @@ export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
     throw new Error("This slot has ended and is no longer available for booking");
   }
 
-  const { scheduleBookingQubeOutboundSync } = await import("@/lib/bookingqube.sync");
-
-  const used = await sumGuests(supabase, data.slot_id, bookingDate);
   if (used + data.guest_count > slot.capacity) throw new Error("Slot is full");
 
   const createdAt = registrationCreatedAtForBookingDay(bookingDate ?? todayYmd());
@@ -1041,21 +1043,26 @@ export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
     .select("id, qr_token, status, created_at, customer_name, guest_count, mobile")
     .single();
   if (error) throw new Error(error.message);
+
+  const { scheduleBookingQubeOutboundSync } = await import("@/lib/bookingqube.sync");
   scheduleBookingQubeOutboundSync(reg.id);
   if (data.email?.trim() && !data.skip_email) {
-    await scheduleRegistrationPassEmail(reg.id, data.email.trim());
+    scheduleRegistrationPassEmail(reg.id, data.email.trim());
   }
-  let checkIn: Awaited<ReturnType<typeof recordEntryCheckIn>> | undefined;
   if (data.auto_check_in) {
-    checkIn = await recordEntryCheckIn(
-      supabase,
-      userId,
-      reg as EntryCheckInReg,
-      slot as EntryCheckInSlot,
-      { skipPassValidation: true },
-    );
+    const regForCheckIn = reg as EntryCheckInReg;
+    const slotForCheckIn = slot as EntryCheckInSlot;
+    after(async () => {
+      try {
+        await recordEntryCheckIn(supabase, userId, regForCheckIn, slotForCheckIn, {
+          skipPassValidation: true,
+        });
+      } catch (err) {
+        console.error("POS auto check-in failed:", err);
+      }
+    });
   }
-  return { id: reg.id, qr_token: reg.qr_token, checkIn };
+  return { id: reg.id, qr_token: reg.qr_token };
 }
 
 export async function searchByMobile(input: { mobile: string }) {
