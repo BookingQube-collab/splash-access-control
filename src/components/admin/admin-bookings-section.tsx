@@ -19,8 +19,13 @@ import { useAdminFilterOptions } from "@/components/admin/use-admin-filter-optio
 import { useAdminTableFilters } from "@/hooks/use-admin-table-filters";
 import { AdminDeleteAllRegistrationsDialog, AdminDeleteAllRegistrationsTrigger } from "@/components/admin/admin-delete-all-registrations-dialog";
 import {
+  AdminFillMissingEmailsDialog,
+  AdminFillMissingEmailsTrigger,
+} from "@/components/admin/admin-fill-missing-emails-dialog";
+import {
   adminDeleteAllRegistrations,
   adminDeleteRegistration,
+  adminFillMissingRegistrationEmails,
   adminListEvents,
   adminListRegistrations,
   adminListSlots,
@@ -60,6 +65,7 @@ export function AdminBookingsSection() {
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [deleteAllScope, setDeleteAllScope] = useState<"all" | "filtered">("all");
+  const [fillMissingEmailsOpen, setFillMissingEmailsOpen] = useState(false);
 
   const serverFilterPayload = useMemo(() => toServerFilters(serverFilters), [serverFilters]);
 
@@ -190,6 +196,27 @@ export function AdminBookingsSection() {
       filters: deleteAllScope === "filtered" ? serverFilterPayload : undefined,
     });
     toast.success(`Deleted ${res.deleted.toLocaleString()} registration(s)`);
+    setPage(1);
+    invalidateRegistrations();
+    await refetch();
+  };
+
+  const openFillMissingEmails = () => {
+    if (tableFilters.mode === "local") {
+      toast.info("Fill missing emails is available in Server mode only");
+      return;
+    }
+    setFillMissingEmailsOpen(true);
+  };
+
+  const handleFillMissingEmailsConfirm = async () => {
+    const res = await adminFillMissingRegistrationEmails({
+      filters: serverFilterPayload,
+      defaultEmail: "rajan@eeeqa.com",
+    });
+    toast.success(
+      `Updated ${res.updated.toLocaleString()} registration(s) with email rajan@eeeqa.com`,
+    );
     setPage(1);
     invalidateRegistrations();
     await refetch();
@@ -387,6 +414,10 @@ export function AdminBookingsSection() {
         }
         bulkDeleteSlot={
           <div className="flex flex-wrap items-center gap-2">
+            <AdminFillMissingEmailsTrigger
+              label="Fill missing emails"
+              onClick={openFillMissingEmails}
+            />
             {hasFilterScope && tableFilters.mode === "server" ? (
               <AdminDeleteAllRegistrationsTrigger
                 variant="filtered"
@@ -409,6 +440,11 @@ export function AdminBookingsSection() {
         scope={deleteAllScope}
         matchCount={deleteAllScope === "filtered" ? total : stats.total}
         onConfirm={handleBulkDeleteConfirm}
+      />
+      <AdminFillMissingEmailsDialog
+        open={fillMissingEmailsOpen}
+        onOpenChange={setFillMissingEmailsOpen}
+        onConfirm={handleFillMissingEmailsConfirm}
       />
 
       <AdminBookingsTable

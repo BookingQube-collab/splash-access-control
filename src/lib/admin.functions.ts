@@ -479,6 +479,11 @@ const bulkDeleteRegistrationsSchema = z.object({
   filters: z.record(z.string(), z.unknown()).optional(),
 });
 
+const bulkFillMissingEmailsSchema = z.object({
+  filters: z.record(z.string(), z.unknown()).optional(),
+  defaultEmail: z.string().trim().email().max(255).default("rajan@eeeqa.com"),
+});
+
 function registrationDeleteDb() {
   const admin = getSupabaseAdminClientOrNull();
   if (!admin) {
@@ -507,6 +512,33 @@ async function listRegistrationIdsForBulkDelete(
     const batch = (data ?? []) as { id: string }[];
     if (batch.length === 0) break;
     ids.push(...batch.map((r) => r.id));
+    if (batch.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return ids;
+}
+
+/** Collect registration ids with missing email matching list filters. */
+async function listMissingEmailRegistrationIds(
+  db: ReturnType<typeof registrationDeleteDb>,
+  parsed: ParsedRegistrationFilters,
+): Promise<string[]> {
+  const ids: string[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+
+  for (;;) {
+    const slotJoin = registrationSlotJoin(parsed);
+    let query = db.from("registrations").select(`id, email, ${slotJoin}(event_id)`);
+    query = applyRegistrationListFilters(query, parsed);
+    const { data, error } = await query.range(offset, offset + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as { id: string; email: string | null }[];
+    if (batch.length === 0) break;
+    for (const row of batch) {
+      if (!row.email?.trim()) ids.push(row.id);
+    }
     if (batch.length < pageSize) break;
     offset += pageSize;
   }
@@ -551,6 +583,32 @@ export async function adminDeleteAllRegistrations(
   if (ids.length === 0) return { ok: true, deleted: 0 };
   const deleted = await deleteRegistrationIdsInBatches(db, ids);
   return { ok: true, deleted };
+}
+
+/** Fill missing registration emails in current filtered set. Admin + service role only. */
+export async function adminFillMissingRegistrationEmails(
+  input: z.infer<typeof bulkFillMissingEmailsSchema>,
+) {
+  const data = bulkFillMissingEmailsSchema.parse(input ?? {});
+  await adminContext();
+  const db = registrationDeleteDb();
+  const parsed = adminListFiltersSchema.parse(data.filters ?? {});
+  const ids = await listMissingEmailRegistrationIds(db, parsed);
+  if (ids.length === 0) return { ok: true, updated: 0 };
+
+  const chunkSize = 500;
+  let updated = 0;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    const { error } = await db
+      .from("registrations")
+      .update({ email: data.defaultEmail })
+      .in("id", chunk);
+    if (error) throw new Error(error.message);
+    updated += chunk.length;
+  }
+
+  return { ok: true, updated };
 }
 
 // ===== Settings =====
