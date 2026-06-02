@@ -216,11 +216,11 @@ export function OverviewPanel({
   const todayUsage = schedule.daySlotUsage.filter((u) => u.date === today);
   const totalGuestsBookedToday = todayUsage.reduce((a, u) => a + u.booked, 0);
   const totalInsideToday = todayUsage.reduce((a, u) => a + u.entered, 0);
-  const totalGuestsBooked = totalGuestsBookedToday || sumOverviewGuestsBooked(slots);
+  const totalGuestsBooked = sumOverviewGuestsBooked(slots);
   const totalInside = totalInsideToday || slots.reduce((a, s) => a + (s.entered ?? 0), 0);
   const soldPct = capacitySoldPercent(totalGuestsBooked, totalCapacity);
   const checkInPct =
-    totalGuestsBooked > 0 ? Math.round((totalInside / totalGuestsBooked) * 100) : 0;
+    totalGuestsBookedToday > 0 ? Math.round((totalInside / totalGuestsBookedToday) * 100) : 0;
 
   const inProgress = schedule.slots
 
@@ -280,13 +280,13 @@ export function OverviewPanel({
 
         <div className="mt-4 grid grid-cols-2 gap-2 text-center text-xs">
 
-          <Stat label="Guests" value={totalGuestsBooked} premium={premium} />
+          <Stat label="Guests (event)" value={totalGuestsBooked} premium={premium} />
 
-          <Stat label="Inside" value={totalInside} premium={premium} />
+          <Stat label="Inside today" value={totalInside} premium={premium} />
 
-          <Stat label="Check-in rate" value={`${checkInPct}%`} premium={premium} />
+          <Stat label="Check-in rate (today)" value={`${checkInPct}%`} premium={premium} />
 
-          <Stat label="Capacity" value={totalCapacity} premium={premium} />
+          <Stat label="Capacity (event)" value={totalCapacity} premium={premium} />
 
         </div>
 

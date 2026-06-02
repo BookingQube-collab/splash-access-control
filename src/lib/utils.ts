@@ -133,10 +133,10 @@ export function sumOverviewGuestsBooked(slots: OverviewSlotCounts[]): number {
   );
 }
 
-/** Total guest capacity for the currently selected booking day across slots. */
+/** Total guest capacity for the selected event across all event days. */
 export function sumOverviewTotalCapacity(slots: OverviewSlotCounts[]): number {
   return slots.reduce(
-    (total, s) => total + (s.total_capacity ?? s.capacity),
+    (total, s) => total + (s.total_capacity ?? s.capacity * (s.event_days ?? 1)),
     0,
   );
 }

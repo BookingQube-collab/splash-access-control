@@ -410,9 +410,9 @@ export async function getDashboardCounts(input?: { eventId?: string }) {
         ends_at: s.ends_at,
         capacity: s.capacity,
         event_id: s.event_id,
-        // Overview percentages compare day-booked guests against day capacity.
+        // Overview capacity cards/gauges should reflect full event capacity.
         event_days: eventDaysById[s.event_id] ?? 1,
-        total_capacity: s.capacity,
+        total_capacity: s.capacity * (eventDaysById[s.event_id] ?? 1),
         active: activeAll,
         entered: enteredToday,
         exited,
