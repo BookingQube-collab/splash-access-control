@@ -22,6 +22,7 @@ import { getDashboardCounts, getDashboardSchedule } from "@/lib/summersplash.fun
 import { getSupabaseAdminClientOrNull } from "@/integrations/supabase/client.server";
 import type { AdminServerFilters } from "@/lib/admin-filters.types";
 import { computeBookingStats } from "@/components/admin/admin-bookings-utils";
+import { registrationCreatedAtForBookingDay } from "@/lib/utils";
 
 const adminListFiltersSchema = z
   .object({
@@ -380,6 +381,7 @@ const registrationUpdateSchema = z.object({
   email: z.string().trim().email().max(255).optional().or(z.literal("")).nullable(),
   guest_count: z.number().int().min(1).max(20),
   slot_id: z.string().uuid(),
+  booking_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   status: registrationStatusSchema,
 });
 
@@ -411,6 +413,18 @@ async function sumSlotGuestsForDay(
   }, 0);
 }
 
+function reanchorCreatedAtToBookingDay(existingCreatedAtIso: string, bookingDateYmd: string): string {
+  const existing = new Date(existingCreatedAtIso);
+  if (Number.isNaN(existing.getTime())) {
+    return registrationCreatedAtForBookingDay(bookingDateYmd);
+  }
+
+  const [year, month, day] = bookingDateYmd.split("-").map(Number);
+  const reanchored = new Date(existing);
+  reanchored.setFullYear(year, month - 1, day);
+  return reanchored.toISOString();
+}
+
 export async function adminUpdateRegistration(input: z.infer<typeof registrationUpdateSchema>) {
   const data = registrationUpdateSchema.parse(input);
   const { supabase } = await adminContext();
@@ -434,14 +448,15 @@ export async function adminUpdateRegistration(input: z.infer<typeof registration
   if (!slot) throw new Error("Slot not found");
 
   if (CAPACITY_STATUSES.has(data.status)) {
-    const bookingDate = existing.created_at.slice(0, 10);
-    const used = await sumSlotGuestsForDay(supabase, data.slot_id, bookingDate, data.id);
+    const used = await sumSlotGuestsForDay(supabase, data.slot_id, data.booking_date, data.id);
     if (used + data.guest_count > slot.capacity) {
       throw new Error(
         `Slot is full for this day (${used} of ${slot.capacity} spots already booked)`,
       );
     }
   }
+
+  const createdAt = reanchorCreatedAtToBookingDay(existing.created_at, data.booking_date);
 
   const { error: updateError } = await supabase
     .from("registrations")
@@ -451,6 +466,7 @@ export async function adminUpdateRegistration(input: z.infer<typeof registration
       email: data.email?.trim() ? data.email.trim() : null,
       guest_count: data.guest_count,
       slot_id: data.slot_id,
+      created_at: createdAt,
       status: data.status,
     })
     .eq("id", data.id);

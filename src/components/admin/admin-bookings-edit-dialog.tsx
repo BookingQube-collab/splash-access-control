@@ -25,6 +25,7 @@ export type BookingEditForm = {
   guest_count: number;
   slot_id: string;
   status: string;
+  booking_date: string;
 };
 
 export function registrationToEditForm(row: AdminRegistrationRow): BookingEditForm {
@@ -35,6 +36,7 @@ export function registrationToEditForm(row: AdminRegistrationRow): BookingEditFo
     guest_count: row.guest_count,
     slot_id: row.slot_id ?? row.slots?.id ?? "",
     status: row.status,
+    booking_date: row.created_at.slice(0, 10),
   };
 }
 
@@ -119,6 +121,17 @@ export function AdminBookingsEditDialog({
                   onChange={(e) =>
                     patch({ guest_count: Math.max(1, parseInt(e.target.value, 10) || 1) })
                   }
+                  className={pillInput}
+                />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-xs font-semibold text-[#64748b]">
+                  Booking date
+                </Label>
+                <Input
+                  type="date"
+                  value={form.booking_date}
+                  onChange={(e) => patch({ booking_date: e.target.value })}
                   className={pillInput}
                 />
               </div>

@@ -236,6 +236,10 @@ export function AdminBookingsSection() {
       toast.error("Slot is required");
       return;
     }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.booking_date)) {
+      toast.error("Booking date is required");
+      return;
+    }
     setSaving(true);
     try {
       await adminUpdateRegistration({
@@ -245,6 +249,7 @@ export function AdminBookingsSection() {
         email: form.email.trim() || null,
         guest_count: form.guest_count,
         slot_id: form.slot_id,
+        booking_date: form.booking_date,
         status: form.status as
           | "active"
           | "entered"
