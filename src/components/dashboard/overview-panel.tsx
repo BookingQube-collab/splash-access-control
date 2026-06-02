@@ -3,6 +3,7 @@
 
 
 import { format, parseISO } from "date-fns";
+import { useMemo, useState } from "react";
 import { formatSlotTimeRange } from "@/lib/slot-time";
 
 import { CalendarDays, ChevronRight } from "lucide-react";
@@ -24,6 +25,13 @@ import {
   todayYmd,
   type OverviewSlotCounts,
 } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type SlotCount = OverviewSlotCounts & {
   id: string;
@@ -32,6 +40,8 @@ type SlotCount = OverviewSlotCounts & {
   ends_at: string;
   remaining: number;
 };
+
+type OverviewScopeMode = "duration" | "today";
 
 
 
@@ -209,30 +219,46 @@ export function OverviewPanel({
 }) {
 
   const premium = variant === "premium";
+  const [scopeMode, setScopeMode] = useState<OverviewScopeMode>("duration");
 
   const today = todayYmd();
+  const todayUsage = useMemo(
+    () => schedule.daySlotUsage.filter((u) => u.date === today),
+    [schedule.daySlotUsage, today],
+  );
 
-  const totalCapacity = sumOverviewTotalCapacity(slots);
-  const todayUsage = schedule.daySlotUsage.filter((u) => u.date === today);
-  const totalGuestsBookedToday = todayUsage.reduce((a, u) => a + u.booked, 0);
-  const totalInsideToday = todayUsage.reduce((a, u) => a + u.entered, 0);
-  const totalGuestsBooked = sumOverviewGuestsBooked(slots);
-  const totalInside = totalInsideToday || slots.reduce((a, s) => a + (s.entered ?? 0), 0);
-  const soldPct = capacitySoldPercent(totalGuestsBooked, totalCapacity);
-  const checkInPct =
-    totalGuestsBookedToday > 0 ? Math.round((totalInside / totalGuestsBookedToday) * 100) : 0;
+  const totals = useMemo(() => {
+    if (scopeMode === "today") {
+      const capacity = todayUsage.reduce((a, u) => a + u.capacity, 0);
+      const guests = todayUsage.reduce((a, u) => a + u.booked, 0);
+      const inside = todayUsage.reduce((a, u) => a + u.entered, 0);
+      const progressPct = capacitySoldPercent(guests, capacity);
+      const checkInRate = guests > 0 ? Math.round((inside / guests) * 100) : 0;
+      return { capacity, guests, inside, progressPct, checkInRate };
+    }
 
-  const inProgress = schedule.slots
+    const capacity = sumOverviewTotalCapacity(slots);
+    const guests = sumOverviewGuestsBooked(slots);
+    const inside = slots.reduce((a, s) => a + (s.entered ?? 0), 0);
+    const progressPct = capacitySoldPercent(guests, capacity);
+    const checkInRate = guests > 0 ? Math.round((inside / guests) * 100) : 0;
+    return { capacity, guests, inside, progressPct, checkInRate };
+  }, [scopeMode, slots, todayUsage]);
+
+  const isTodayMode = scopeMode === "today";
+  const modeLabel = isTodayMode ? "today" : "event";
+
+  const inProgress = slots
 
     .map((slot, i) => {
 
       const usage = todayUsage.find((u) => u.slot_id === slot.id);
 
-      const checkedIn = usage?.entered ?? 0;
+      const checkedIn = isTodayMode ? (usage?.entered ?? 0) : (slot.entered ?? 0);
 
-      const registered = usage?.booked ?? 0;
+      const registered = isTodayMode ? (usage?.booked ?? 0) : (slot.booked ?? 0);
 
-      const cap = usage?.capacity ?? slot.capacity;
+      const cap = isTodayMode ? (usage?.capacity ?? slot.capacity) : slot.capacity;
 
       const pct = cap > 0 ? Math.round((checkedIn / cap) * 100) : 0;
 
@@ -276,17 +302,35 @@ export function OverviewPanel({
 
       <Panel title="Overall progress" premium={premium}>
 
-        <SemiGauge pct={soldPct} premium={premium} />
+        <div className="mb-4 flex justify-end">
+          <Select value={scopeMode} onValueChange={(value) => setScopeMode(value as OverviewScopeMode)}>
+            <SelectTrigger
+              className={cn(
+                "h-8 w-[170px] rounded-full text-xs",
+                premium ? "border-[#dbe4ec] bg-white" : "border-[#dce8ea] bg-[#FAF8F4]",
+              )}
+              aria-label="Overview scope"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="duration">Whole duration</SelectItem>
+              <SelectItem value="today">Active today</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <SemiGauge pct={totals.progressPct} premium={premium} />
 
         <div className="mt-4 grid grid-cols-2 gap-2 text-center text-xs">
 
-          <Stat label="Guests (event)" value={totalGuestsBooked} premium={premium} />
+          <Stat label={`Guests (${modeLabel})`} value={totals.guests} premium={premium} />
 
-          <Stat label="Inside today" value={totalInside} premium={premium} />
+          <Stat label={`Inside (${modeLabel})`} value={totals.inside} premium={premium} />
 
-          <Stat label="Check-in rate (today)" value={`${checkInPct}%`} premium={premium} />
+          <Stat label={`Check-in rate (${modeLabel})`} value={`${totals.checkInRate}%`} premium={premium} />
 
-          <Stat label="Capacity (event)" value={totalCapacity} premium={premium} />
+          <Stat label={`Capacity (${modeLabel})`} value={totals.capacity} premium={premium} />
 
         </div>
 
@@ -304,7 +348,7 @@ export function OverviewPanel({
 
             <p className={cn("text-sm", premium ? "text-[#64748b]" : "text-[#5a7a80]")}>
 
-              No bookings today for this event.
+              {isTodayMode ? "No bookings today for this event." : "No bookings yet for this event duration."}
 
             </p>
 
