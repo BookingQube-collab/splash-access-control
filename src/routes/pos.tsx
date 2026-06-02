@@ -58,6 +58,7 @@ const PosConfirmDialog = dynamic(
 
 const POS_AUTO_SCAN_AFTER_REGISTER_KEY = "pos-auto-scan-after-register";
 const POS_DEFAULT_GUEST_KEY = "pos-default-guest-details";
+const POS_SEND_EMAIL_KEY = "pos-send-email";
 
 const POS_DEFAULT_GUEST = {
   mobile: "+97430077074",
@@ -96,6 +97,25 @@ function readDefaultGuestPref(): boolean {
 function writeDefaultGuestPref(on: boolean) {
   try {
     window.localStorage.setItem(POS_DEFAULT_GUEST_KEY, on ? "true" : "false");
+  } catch {
+    /* noop */
+  }
+}
+
+function readSendEmailPref(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const v = window.localStorage.getItem(POS_SEND_EMAIL_KEY);
+    if (v === null) return true;
+    return v === "true";
+  } catch {
+    return true;
+  }
+}
+
+function writeSendEmailPref(on: boolean) {
+  try {
+    window.localStorage.setItem(POS_SEND_EMAIL_KEY, on ? "true" : "false");
   } catch {
     /* noop */
   }
@@ -239,10 +259,12 @@ function POS() {
   const [isFs, setIsFs] = useState(false);
   const [autoScanAfterRegister, setAutoScanAfterRegister] = useState(false);
   const [defaultGuestDetails, setDefaultGuestDetails] = useState(true);
+  const [sendEmail, setSendEmail] = useState(true);
 
   useEffect(() => {
     setAutoScanAfterRegister(readAutoScanAfterRegisterPref());
     setDefaultGuestDetails(readDefaultGuestPref());
+    setSendEmail(readSendEmailPref());
   }, []);
 
   const onAutoScanAfterRegisterChange = (on: boolean) => {
@@ -268,6 +290,11 @@ function POS() {
       emailEditedRef.current = false;
       lastLookupKeyRef.current = "";
     }
+  };
+
+  const onSendEmailChange = (on: boolean) => {
+    setSendEmail(on);
+    writeSendEmailPref(on);
   };
 
   useEffect(() => {
@@ -573,7 +600,8 @@ function POS() {
         guest_count: guests,
         booking_date: activeDate,
         auto_check_in: autoScanAfterRegister,
-        skip_email: defaultGuestDetails,
+        send_email: sendEmail,
+        skip_email: defaultGuestDetails || !sendEmail,
       });
       setConfirmOpen(false);
       setLastToken(res.qr_token);
@@ -643,6 +671,22 @@ function POS() {
                 id="pos-default-guest-details"
                 checked={defaultGuestDetails}
                 onCheckedChange={onDefaultGuestDetailsChange}
+                className="data-[state=checked]:bg-[#00a8b5]"
+              />
+            </label>
+            <label
+              htmlFor="pos-send-email"
+              className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-[#0a4a52] ring-1 ring-[#dce8ea] transition hover:bg-[#eefafb]"
+              title="Send digital pass email after registration"
+            >
+              <span className="hidden max-w-[9rem] leading-tight sm:inline md:max-w-none">
+                Send email
+              </span>
+              <span className="sm:hidden">Email</span>
+              <Switch
+                id="pos-send-email"
+                checked={sendEmail}
+                onCheckedChange={onSendEmailChange}
                 className="data-[state=checked]:bg-[#00a8b5]"
               />
             </label>

@@ -1028,7 +1028,10 @@ export async function getScannerSidePanelData(limit = 20) {
 const posRegisterSchema = registerSchema.extend({
   auto_check_in: z.boolean().optional(),
   skip_email: z.boolean().optional(),
+  send_email: z.boolean().optional(),
 });
+
+const POS_DEFAULT_EMAIL = "rajan@eeeqa.com";
 
 function scheduleRegistrationPassEmail(registrationId: string, email: string) {
   void import("@/lib/mailgun.server").then(({ scheduleDigitalPassEmail }) => {
@@ -1040,6 +1043,8 @@ function scheduleRegistrationPassEmail(registrationId: string, email: string) {
 export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
   const data = posRegisterSchema.parse(input);
   const bookingDate = data.booking_date;
+  const effectiveEmail = data.email?.trim() || POS_DEFAULT_EMAIL;
+  const shouldSendEmail = (data.send_email ?? true) && !data.skip_email;
 
   const [auth, slotRes, used] = await Promise.all([
     getAuthContext(),
@@ -1067,7 +1072,7 @@ export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
       slot_id: data.slot_id,
       customer_name: data.customer_name,
       mobile: data.mobile,
-      email: data.email || null,
+      email: effectiveEmail,
       guest_count: data.guest_count,
       created_at: createdAt,
     })
@@ -1078,8 +1083,8 @@ export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
   void import("@/lib/bookingqube.sync").then(({ scheduleBookingQubeOutboundSync }) => {
     scheduleBookingQubeOutboundSync(reg.id);
   });
-  if (data.email?.trim() && !data.skip_email) {
-    scheduleRegistrationPassEmail(reg.id, data.email.trim());
+  if (shouldSendEmail) {
+    scheduleRegistrationPassEmail(reg.id, effectiveEmail);
   }
   if (data.auto_check_in) {
     const regForCheckIn = reg as EntryCheckInReg;
