@@ -403,7 +403,6 @@ export async function getDashboardCounts(input?: { eventId?: string }) {
       const auto_exited = sumRegistrationGuestCount(regs.filter((r) => r.status === "auto_exited"));
       const usedToday = activeToday + enteredToday;
       const booked = bookedToday;
-      const eventDays = eventDaysById[s.event_id] ?? 1;
       return {
         id: s.id,
         name: s.name,
@@ -411,8 +410,9 @@ export async function getDashboardCounts(input?: { eventId?: string }) {
         ends_at: s.ends_at,
         capacity: s.capacity,
         event_id: s.event_id,
-        event_days: eventDays,
-        total_capacity: s.capacity * eventDays,
+        // Overview percentages compare day-booked guests against day capacity.
+        event_days: eventDaysById[s.event_id] ?? 1,
+        total_capacity: s.capacity,
         active: activeAll,
         entered: enteredToday,
         exited,
