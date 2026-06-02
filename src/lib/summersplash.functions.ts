@@ -399,10 +399,10 @@ export async function getDashboardCounts(input?: { eventId?: string }) {
       const enteredToday = sumGuestsForBookingDay(regs, today, new Set(["entered"]));
       const activeToday = sumGuestsForBookingDay(regs, today, new Set(["active"]));
       const bookedToday = sumGuestsForBookingDay(regs, today, bookedStatuses);
+      const bookedAll = sumRegistrationGuestCount(regs.filter((r) => bookedStatuses.has(r.status)));
       const exited = sumRegistrationGuestCount(regs.filter((r) => r.status === "exited"));
       const auto_exited = sumRegistrationGuestCount(regs.filter((r) => r.status === "auto_exited"));
       const usedToday = activeToday + enteredToday;
-      const booked = bookedToday;
       return {
         id: s.id,
         name: s.name,
@@ -417,7 +417,8 @@ export async function getDashboardCounts(input?: { eventId?: string }) {
         entered: enteredToday,
         exited,
         auto_exited,
-        booked,
+        // Event-level overview cards use total booked guests across the whole event duration.
+        booked: bookedAll,
         invalid: countActionableInvalidScans(
           (invalidScanRows.data ?? []).map((row) => ({
             result: "invalid",

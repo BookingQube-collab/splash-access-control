@@ -313,7 +313,7 @@ export function OverviewPanel({
             >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="item-aligned">
               <SelectItem value="duration">Whole duration</SelectItem>
               <SelectItem value="today">Active today</SelectItem>
             </SelectContent>
