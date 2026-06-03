@@ -112,6 +112,12 @@ export type BookingQubeOutboundSyncResult = {
   error?: string;
 };
 
+/** Options for outbound sync (e.g. admin bulk resync-all). */
+export type BookingQubeOutboundSyncOptions = {
+  /** Treat BookingQube duplicate-email responses as success after POST (resync-all). */
+  forceResync?: boolean;
+};
+
 function bqLog(message: string, detail?: Record<string, unknown>) {
   if (detail && Object.keys(detail).length > 0) {
     console.log(BQ_SYNC_LOG, message, detail);
@@ -719,9 +725,10 @@ export function scheduleBookingQubeOutboundSync(registrationId: string): void {
 
 export async function runBookingQubeOutboundSync(
   registrationId: string,
+  options?: BookingQubeOutboundSyncOptions,
 ): Promise<BookingQubeOutboundSyncResult> {
   try {
-    return await syncRegistrationOutbound(registrationId);
+    return await syncRegistrationOutbound(registrationId, options);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(BQ_SYNC_LOG, "outbound sync threw:", message);
@@ -749,6 +756,7 @@ function hasConfiguredPostUrl(config: BookingQubeConfig): boolean {
 
 export async function syncRegistrationOutbound(
   registrationId: string,
+  options?: BookingQubeOutboundSyncOptions,
 ): Promise<BookingQubeOutboundSyncResult> {
   if (!getSupabaseAdminClientOrNull()) {
     const reason =
@@ -988,6 +996,20 @@ export async function syncRegistrationOutbound(
       built: payload,
     });
     if (duplicate) {
+      if (options?.forceResync) {
+        bqLog("POST duplicate acknowledged (force resync)", {
+          registrationId,
+          message,
+          request: requestBody,
+        });
+        await writeSyncLog({
+          registrationId,
+          direction: "out",
+          status: "success",
+          payload: { ...logPayload, duplicateAcknowledged: true, duplicateMessage: message },
+        });
+        return { ok: true };
+      }
       await writeSyncLog({
         registrationId,
         direction: "out",

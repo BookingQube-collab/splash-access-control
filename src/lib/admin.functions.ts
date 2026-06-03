@@ -2312,7 +2312,10 @@ export async function adminCountAllRegistrations() {
   }
 }
 
-async function runBulkOutboundBookingQubeSync(ids: string[]) {
+async function runBulkOutboundBookingQubeSync(
+  ids: string[],
+  options?: { forceResync?: boolean },
+) {
   const { resolveBookingQubeConfig, runBookingQubeOutboundSync } = await import(
     "@/lib/bookingqube.sync"
   );
@@ -2342,7 +2345,7 @@ async function runBulkOutboundBookingQubeSync(ids: string[]) {
   }
 
   const outcomes = await mapWithConcurrency(ids, 5, async (registrationId) => {
-    await runBookingQubeOutboundSync(registrationId);
+    await runBookingQubeOutboundSync(registrationId, options);
     const result = await getLatestOutboundSyncStatus(registrationId);
     return {
       registrationId,
@@ -2395,7 +2398,7 @@ export async function adminResyncAllRegistrations() {
     }
     throw err;
   }
-  return runBulkOutboundBookingQubeSync(ids);
+  return runBulkOutboundBookingQubeSync(ids, { forceResync: true });
 }
 
 export async function adminListBookingQubeSyncLogs(input?: { limit?: number }) {

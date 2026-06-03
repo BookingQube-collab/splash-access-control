@@ -714,12 +714,15 @@ export const AdminSettingsBookingQubeCard = forwardRef<
     allRegsData?.tablesReady !== false ? (allRegsData?.count ?? 0) : 0;
   const canBulkSync = tablesReady && enabled && Boolean(postApiUrl.trim());
 
-  const formatBulkSyncToast = (res: {
-    synced: number;
-    skipped?: number;
-    failed: number;
-    total: number;
-  }) => {
+  const formatBulkSyncToast = (
+    res: {
+      synced: number;
+      skipped?: number;
+      failed: number;
+      total: number;
+    },
+    opts?: { resyncAll?: boolean },
+  ) => {
     if (res.total === 0) {
       toast.success("No registrations to sync");
       return;
@@ -733,7 +736,11 @@ export const AdminSettingsBookingQubeCard = forwardRef<
     const parts: string[] = [];
     if (res.synced > 0) parts.push(`${res.synced} synced`);
     if ((res.skipped ?? 0) > 0) {
-      parts.push(`${res.skipped} skipped (email already registered)`);
+      parts.push(
+        opts?.resyncAll
+          ? `${res.skipped} skipped (validation or config)`
+          : `${res.skipped} skipped (email already registered)`,
+      );
     }
     if (res.failed > 0) parts.push(`${res.failed} failed`);
     toast.warning(`${parts.join(", ")} of ${res.total}. See sync log for details.`);
@@ -760,7 +767,7 @@ export const AdminSettingsBookingQubeCard = forwardRef<
     setBusy("resync-all");
     try {
       const res = await adminResyncAllRegistrations();
-      formatBulkSyncToast(res);
+      formatBulkSyncToast(res, { resyncAll: true });
       await Promise.all([refetchLogs(), refetchUnsynced()]);
     } catch (e: unknown) {
       toast.error(formatActionError(e));
@@ -1197,8 +1204,9 @@ export const AdminSettingsBookingQubeCard = forwardRef<
                     {totalRegistrationCount} registration
                     {totalRegistrationCount === 1 ? "" : "s"}
                   </span>{" "}
-                  to BookingQube, including ones already marked as synced. Duplicate emails may be
-                  skipped by BookingQube.
+                  to BookingQube, including ones already marked as synced. Every registration is
+                  POSTed again; if BookingQube reports the email is already registered, it is
+                  counted as synced.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter className="gap-2 sm:gap-2">
