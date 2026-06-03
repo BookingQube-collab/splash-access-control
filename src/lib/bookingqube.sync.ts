@@ -446,7 +446,7 @@ async function writeSyncLog(input: {
   status: SyncLogStatus;
   payload?: unknown;
   error?: string;
-}): Promise<void> {
+}): Promise<boolean> {
   const admin = getSupabaseAdminClientOrNull();
   if (!admin) {
     console.error(
@@ -454,7 +454,7 @@ async function writeSyncLog(input: {
       "Cannot write integration_sync_log — missing SUPABASE_SERVICE_ROLE_KEY",
       { registrationId: input.registrationId, error: input.error },
     );
-    return;
+    return false;
   }
   const { error } = await admin.from("integration_sync_log").insert({
     provider: PROVIDER,
@@ -466,7 +466,9 @@ async function writeSyncLog(input: {
   });
   if (error) {
     console.error(BQ_SYNC_LOG, "integration_sync_log insert failed:", error.message, input);
+    return false;
   }
+  return true;
 }
 
 async function logOutboundSkip(
@@ -761,8 +763,7 @@ export async function syncRegistrationOutbound(
   if (!getSupabaseAdminClientOrNull()) {
     const reason =
       "Missing SUPABASE_SERVICE_ROLE_KEY — outbound sync cannot run (add key to .env)";
-    bqLog(reason, { registrationId });
-    return { ok: false, error: reason };
+    return logOutboundSkip(registrationId, reason);
   }
 
   const { data: settingsRow } = await supabaseAdmin

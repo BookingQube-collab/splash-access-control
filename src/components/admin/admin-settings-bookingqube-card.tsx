@@ -254,9 +254,14 @@ export const AdminSettingsBookingQubeCard = forwardRef<
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
+  const [syncLogFilter, setSyncLogFilter] = useState<"all" | "errors">("all");
   const { data: syncLogs, refetch: refetchLogs } = useQuery({
-    queryKey: ["bq-sync-logs"],
-    queryFn: () => adminListBookingQubeSyncLogs({ limit: 30 }),
+    queryKey: ["bq-sync-logs", syncLogFilter],
+    queryFn: () =>
+      adminListBookingQubeSyncLogs({
+        limit: syncLogFilter === "errors" ? 100 : 50,
+        ...(syncLogFilter === "errors" ? { status: ["error"] as const } : {}),
+      }),
   });
   const tablesReady = data?.tablesReady !== false;
   const { data: unsyncedData, refetch: refetchUnsynced } = useQuery({
@@ -720,6 +725,7 @@ export const AdminSettingsBookingQubeCard = forwardRef<
       skipped?: number;
       failed: number;
       total: number;
+      errors?: { registrationId: string; error: string }[];
     },
     opts?: { resyncAll?: boolean },
   ) => {
@@ -743,7 +749,20 @@ export const AdminSettingsBookingQubeCard = forwardRef<
       );
     }
     if (res.failed > 0) parts.push(`${res.failed} failed`);
-    toast.warning(`${parts.join(", ")} of ${res.total}. See sync log for details.`);
+    let message = `${parts.join(", ")} of ${res.total}.`;
+    if (res.failed > 0) {
+      message += " Open sync log (Errors) for details.";
+      const sample = res.errors?.[0];
+      if (sample) {
+        const idShort = `${sample.registrationId.slice(0, 8)}…`;
+        const errText =
+          sample.error.length > 100 ? `${sample.error.slice(0, 97)}…` : sample.error;
+        message += ` Example: ${idShort} — ${errText}`;
+      }
+    } else {
+      message += " See sync log for details.";
+    }
+    toast.warning(message);
   };
 
   const syncAllUnsynced = async () => {
@@ -754,6 +773,7 @@ export const AdminSettingsBookingQubeCard = forwardRef<
         toast.success("All registrations are already synced to BookingQube");
       } else {
         formatBulkSyncToast(res);
+        if (res.failed > 0) setSyncLogFilter("errors");
       }
       await Promise.all([refetchLogs(), refetchUnsynced()]);
     } catch (e: unknown) {
@@ -768,6 +788,7 @@ export const AdminSettingsBookingQubeCard = forwardRef<
     try {
       const res = await adminResyncAllRegistrations();
       formatBulkSyncToast(res, { resyncAll: true });
+      if (res.failed > 0) setSyncLogFilter("errors");
       await Promise.all([refetchLogs(), refetchUnsynced()]);
     } catch (e: unknown) {
       toast.error(formatActionError(e));
@@ -1235,11 +1256,49 @@ export const AdminSettingsBookingQubeCard = forwardRef<
         </div>
 
         <div ref={syncLogRef} className="rounded-[16px] border border-[#e2e8f0] bg-white p-4">
-          <h3 className="text-sm font-semibold text-[#134e4a]">Sync log</h3>
-          <p className="mt-1 text-xs text-[#64748b]">Recent outbound/inbound BookingQube sync attempts.</p>
-          <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-[#134e4a]">Sync log</h3>
+            <div className="flex gap-1 rounded-lg bg-[#f1f5f9] p-0.5 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setSyncLogFilter("all")}
+                className={`rounded-md px-2 py-1 font-semibold ${
+                  syncLogFilter === "all"
+                    ? "bg-white text-[#134e4a] shadow-sm"
+                    : "text-[#64748b] hover:text-[#334155]"
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setSyncLogFilter("errors")}
+                className={`rounded-md px-2 py-1 font-semibold ${
+                  syncLogFilter === "errors"
+                    ? "bg-white text-red-700 shadow-sm"
+                    : "text-[#64748b] hover:text-[#334155]"
+                }`}
+              >
+                Errors
+              </button>
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-[#64748b]">
+            {syncLogFilter === "errors"
+              ? "Failed outbound sync attempts (validation, API, or config)."
+              : "Recent outbound/inbound BookingQube sync attempts."}
+          </p>
+          <ul
+            className={`mt-3 space-y-2 overflow-y-auto text-xs ${
+              syncLogFilter === "errors" ? "max-h-64" : "max-h-48"
+            }`}
+          >
             {(syncLogs?.logs ?? []).length === 0 ? (
-              <li className="text-[#94a3b8]">No sync activity yet.</li>
+              <li className="text-[#94a3b8]">
+                {syncLogFilter === "errors"
+                  ? "No failed sync entries in the log."
+                  : "No sync activity yet."}
+              </li>
             ) : (
               (syncLogs?.logs ?? []).map((log) => (
                 <BookingQubeSyncLogEntry key={log.id} log={log as SyncLogRow} />

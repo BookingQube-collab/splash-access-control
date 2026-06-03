@@ -2242,29 +2242,6 @@ async function listUnsyncedRegistrationIds(): Promise<string[]> {
   return allIds.filter((id) => !syncedIds.has(id));
 }
 
-async function getLatestOutboundSyncStatus(registrationId: string): Promise<{
-  success: boolean;
-  skipped?: boolean;
-  error?: string;
-}> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data } = await supabaseAdmin
-    .from("integration_sync_log")
-    .select("status, error")
-    .eq("provider", BOOKINGQUBE_PROVIDER)
-    .eq("registration_id", registrationId)
-    .eq("direction", "out")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!data) return { success: false, error: "No sync log written" };
-  return {
-    success: data.status === "success",
-    skipped: data.status === "skipped",
-    error: data.error ?? undefined,
-  };
-}
-
 async function mapWithConcurrency<T, R>(
   items: readonly T[],
   limit: number,
@@ -2345,14 +2322,23 @@ async function runBulkOutboundBookingQubeSync(
   }
 
   const outcomes = await mapWithConcurrency(ids, 5, async (registrationId) => {
-    await runBookingQubeOutboundSync(registrationId, options);
-    const result = await getLatestOutboundSyncStatus(registrationId);
-    return {
-      registrationId,
-      success: result.success,
-      skipped: result.skipped,
-      error: result.error,
-    };
+    try {
+      const result = await runBookingQubeOutboundSync(registrationId, options);
+      return {
+        registrationId,
+        success: result.ok,
+        skipped: Boolean(result.skipped),
+        error: result.error,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        registrationId,
+        success: false,
+        skipped: false,
+        error: message,
+      };
+    }
   });
 
   let synced = 0;
@@ -2401,14 +2387,31 @@ export async function adminResyncAllRegistrations() {
   return runBulkOutboundBookingQubeSync(ids, { forceResync: true });
 }
 
-export async function adminListBookingQubeSyncLogs(input?: { limit?: number }) {
-  const data = z.object({ limit: z.number().int().min(1).max(200).optional() }).parse(input ?? {});
+export async function adminListBookingQubeSyncLogs(input?: {
+  limit?: number;
+  status?: Array<"success" | "error" | "pending" | "skipped">;
+  direction?: "in" | "out";
+}) {
+  const data = z
+    .object({
+      limit: z.number().int().min(1).max(200).optional(),
+      status: z.array(z.enum(["success", "error", "pending", "skipped"])).optional(),
+      direction: z.enum(["in", "out"]).optional(),
+    })
+    .parse(input ?? {});
   const { supabase } = await adminContext();
-  const { data: logs } = await supabase
+  let query = supabase
     .from("integration_sync_log")
     .select("id, direction, status, error, payload, created_at, registration_id")
     .eq("provider", BOOKINGQUBE_PROVIDER)
     .order("created_at", { ascending: false })
     .limit(data.limit ?? 50);
+  if (data.direction) {
+    query = query.eq("direction", data.direction);
+  }
+  if (data.status?.length) {
+    query = query.in("status", data.status);
+  }
+  const { data: logs } = await query;
   return { logs: logs ?? [] };
 }
