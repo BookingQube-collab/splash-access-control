@@ -72,6 +72,12 @@ import {
   type BookingQubeSubmitRequestBody,
 
 } from "@/lib/bookingqube.mapping";
+import {
+  posAgeGroupLabel,
+  posNationalityLabel,
+  type PosAgeGroup,
+  type PosNationality,
+} from "@/lib/pos-customer-demographics";
 
 import { after } from "next/server";
 
@@ -286,6 +292,10 @@ type RegistrationRow = {
 
   email: string | null;
 
+  nationality?: string | null;
+
+  age_group?: string | null;
+
   guest_count: number;
 
   created_at: string;
@@ -348,6 +358,18 @@ function localValue(reg: RegistrationRow, localField: string): string | number |
     case "email":
 
       return reg.email ?? "";
+
+    case "nationality": {
+      const raw = reg.nationality?.trim();
+      if (!raw) return "";
+      return posNationalityLabel(raw as PosNationality);
+    }
+
+    case "age_group": {
+      const raw = reg.age_group?.trim();
+      if (!raw) return "";
+      return posAgeGroupLabel(raw as PosAgeGroup);
+    }
 
     case "guest_count":
 
@@ -417,6 +439,10 @@ const DEFAULT_LABEL_MAPPINGS: FieldMappingRow[] = [
   { bookingqube_field_id: null, bookingqube_label: "name", local_field: "customer_name" },
 
   { bookingqube_field_id: null, bookingqube_label: "email", local_field: "email" },
+
+  { bookingqube_field_id: null, bookingqube_label: "nationality", local_field: "nationality" },
+
+  { bookingqube_field_id: null, bookingqube_label: "age", local_field: "age_group" },
 
   { bookingqube_field_id: null, bookingqube_label: "guests", local_field: "guest_count" },
 
@@ -803,7 +829,7 @@ export async function syncRegistrationOutbound(
   const { data: reg, error } = await supabaseAdmin
     .from("registrations")
     .select(
-      "id, customer_name, mobile, email, guest_count, created_at, qr_token, slot_id, slots(id, name, starts_at, ends_at, event_id, bookingqube_ticket_id, events(id, name))",
+      "id, customer_name, mobile, email, nationality, age_group, guest_count, created_at, qr_token, slot_id, slots(id, name, starts_at, ends_at, event_id, bookingqube_ticket_id, events(id, name))",
     )
     .eq("id", registrationId)
     .maybeSingle();
@@ -1216,7 +1242,7 @@ async function loadLatestRegistrationForEvent(
 
     .select(
 
-      "id, customer_name, mobile, email, guest_count, created_at, qr_token, slot_id, slots(id, name, starts_at, ends_at, event_id, bookingqube_ticket_id, events(id, name))",
+      "id, customer_name, mobile, email, nationality, age_group, guest_count, created_at, qr_token, slot_id, slots(id, name, starts_at, ends_at, event_id, bookingqube_ticket_id, events(id, name))",
 
     )
 

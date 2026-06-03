@@ -275,6 +275,8 @@ const LOCAL_FIELD_LABEL_HINTS: Record<LocalRegistrationField, string[]> = {
   customer_name: ["name", "full name", "customer", "attendee", "guest name"],
   mobile: ["phone", "mobile", "tel", "whatsapp", "contact"],
   email: ["email", "e-mail", "mail"],
+  nationality: ["nationality", "resident", "tourist", "citizen", "country"],
+  age_group: ["age group", "age range", "age bracket", "senior", "child", "teen", "adult"],
   guest_count: ["guest", "party", "pax", "attendees", "quantity", "count"],
   booking_date: ["date", "visit date", "booking date", "day"],
   slot_id: ["slot id", "slot_id", "time slot id"],
@@ -320,6 +322,10 @@ export function guessLocalFieldFromBookingQubeField(field: {
   const l = tokens;
   if (l.includes("phone") || l.includes("mobile")) return "mobile";
   if (l.includes("email")) return "email";
+  if (l.includes("nationality") || l.includes("resident") || l.includes("tourist")) {
+    return "nationality";
+  }
+  if (l.includes("age")) return "age_group";
   if (l.includes("name")) return "customer_name";
   if (l.includes("guest")) return "guest_count";
   if (l.includes("date")) return "booking_date";
@@ -891,6 +897,8 @@ export const SAMPLE_LOCAL_REGISTRATION_VALUES: Record<string, string | number> =
   customer_name: "Test User (SummerSplash)",
   mobile: "+97450000000",
   email: "test@summersplash.example",
+  nationality: "Tourist",
+  age_group: "Adult (18–59 years)",
   guest_count: 2,
   booking_date: new Date().toISOString().slice(0, 10),
   slot_name: "Morning slot · 10 am – 1 pm",
