@@ -655,6 +655,9 @@ function formatOutboundSyncError(
   schemaFields?: BookingQubeSchemaField[],
 ): string {
   if (err instanceof BookingQubeHttpError) {
+    if (err.status === 429) {
+      return `BookingQube rate limited (HTTP 429) — ${err.url}`;
+    }
     const fieldSummary = formatBookingQubeSubmitErrorSummary(err.body, schemaFields);
     if (fieldSummary) return fieldSummary;
     const apiDetail = formatBookingQubeValidationErrors(err.body, schemaFields);
@@ -989,13 +992,17 @@ export async function syncRegistrationOutbound(
       fieldErrors: fieldErrors.length ? fieldErrors : undefined,
       formId: eventCtx.formId,
     };
-    bqLog(duplicate ? "POST skipped (duplicate)" : "POST failed", {
-      registrationId,
-      message,
-      request: requestBody,
-      apiErrors,
-      built: payload,
-    });
+    const rateLimited = err instanceof BookingQubeHttpError && err.status === 429;
+    bqLog(
+      duplicate ? "POST skipped (duplicate)" : rateLimited ? "POST rate limited" : "POST failed",
+      {
+        registrationId,
+        message,
+        request: requestBody,
+        apiErrors,
+        built: payload,
+      },
+    );
     if (duplicate) {
       if (options?.forceResync) {
         bqLog("POST duplicate acknowledged (force resync)", {

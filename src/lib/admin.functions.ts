@@ -2242,6 +2242,14 @@ async function listUnsyncedRegistrationIds(): Promise<string[]> {
   return allIds.filter((id) => !syncedIds.has(id));
 }
 
+const BULK_BQ_SYNC_RESYNC_CONCURRENCY = 2;
+const BULK_BQ_SYNC_UNSYNCED_CONCURRENCY = 3;
+const BULK_BQ_SYNC_INTER_REQUEST_MS = 300;
+
+function bulkSyncInterRequestDelay(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, BULK_BQ_SYNC_INTER_REQUEST_MS));
+}
+
 async function mapWithConcurrency<T, R>(
   items: readonly T[],
   limit: number,
@@ -2316,14 +2324,21 @@ async function runBulkOutboundBookingQubeSync(
       synced: 0,
       skipped: 0,
       failed: 0,
+      rateLimited: 0,
       total: 0,
       errors: [] as { registrationId: string; error: string }[],
     };
   }
 
-  const outcomes = await mapWithConcurrency(ids, 5, async (registrationId) => {
+  const { isBookingQubeRateLimitMessage } = await import("@/lib/bookingqube.client");
+  const concurrency = options?.forceResync
+    ? BULK_BQ_SYNC_RESYNC_CONCURRENCY
+    : BULK_BQ_SYNC_UNSYNCED_CONCURRENCY;
+
+  const outcomes = await mapWithConcurrency(ids, concurrency, async (registrationId) => {
     try {
       const result = await runBookingQubeOutboundSync(registrationId, options);
+      await bulkSyncInterRequestDelay();
       return {
         registrationId,
         success: result.ok,
@@ -2332,6 +2347,7 @@ async function runBulkOutboundBookingQubeSync(
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      await bulkSyncInterRequestDelay();
       return {
         registrationId,
         success: false,
@@ -2344,20 +2360,30 @@ async function runBulkOutboundBookingQubeSync(
   let synced = 0;
   let skipped = 0;
   let failed = 0;
+  let rateLimited = 0;
   const errors: { registrationId: string; error: string }[] = [];
   for (const o of outcomes) {
     if (o.success) synced++;
     else if (o.skipped) skipped++;
     else {
       failed++;
-      errors.push({ registrationId: o.registrationId, error: o.error ?? "Sync failed" });
+      const errorText = o.error ?? "Sync failed";
+      if (isBookingQubeRateLimitMessage(errorText)) rateLimited++;
+      errors.push({ registrationId: o.registrationId, error: errorText });
     }
   }
 
-  return { synced, skipped, failed, total: ids.length, errors: errors.slice(0, 50) };
+  return {
+    synced,
+    skipped,
+    failed,
+    rateLimited,
+    total: ids.length,
+    errors: errors.slice(0, 50),
+  };
 }
 
-/** Push every unsynced registration to BookingQube POST (concurrency 5). */
+/** Push every unsynced registration to BookingQube POST (concurrency 3, paced). */
 export async function adminSyncUnsyncedRegistrations() {
   await adminContext();
   let ids: string[];
@@ -2372,7 +2398,7 @@ export async function adminSyncUnsyncedRegistrations() {
   return runBulkOutboundBookingQubeSync(ids);
 }
 
-/** Re-push every registration to BookingQube POST (concurrency 5), including already synced. */
+/** Re-push every registration to BookingQube POST (concurrency 2, paced), including already synced. */
 export async function adminResyncAllRegistrations() {
   await adminContext();
   let ids: string[];

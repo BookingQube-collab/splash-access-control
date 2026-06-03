@@ -322,15 +322,47 @@ export function formatBookingQubeHttpError(input: {
     (typeof root?.title === "string" && root.title) ||
     null;
   const snippet = bodySnippet(input.body);
-  const parts = [
-    input.context ?? `BookingQube ${input.method} failed`,
-    `HTTP ${input.status}`,
-    input.url,
-  ];
+  const defaultContext =
+    input.status === 429
+      ? `BookingQube ${input.method} rate limited`
+      : `BookingQube ${input.method} failed`;
+  const parts = [input.context ?? defaultContext, `HTTP ${input.status}`, input.url];
   if (validationDetail) parts.push(validationDetail);
   else if (apiMsg) parts.push(apiMsg);
   else if (snippet && snippet !== "{}") parts.push(snippet);
   return parts.join(" — ");
+}
+
+const RATE_LIMIT_MAX_RETRIES = 4;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Parse Retry-After (seconds or HTTP-date) into milliseconds. */
+function parseRetryAfterMs(header: string | null): number | null {
+  if (!header?.trim()) return null;
+  const trimmed = header.trim();
+  const seconds = Number(trimmed);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(seconds * 1000, 120_000);
+  }
+  const dateMs = Date.parse(trimmed);
+  if (!Number.isNaN(dateMs)) {
+    return Math.max(0, Math.min(dateMs - Date.now(), 120_000));
+  }
+  return null;
+}
+
+function rateLimitBackoffMs(attempt: number, retryAfterHeader: string | null): number {
+  const fromHeader = parseRetryAfterMs(retryAfterHeader);
+  if (fromHeader != null && fromHeader > 0) return fromHeader;
+  return Math.min(30_000, 1000 * 2 ** attempt);
+}
+
+/** True when an error message indicates BookingQube returned HTTP 429 after retries. */
+export function isBookingQubeRateLimitMessage(message: string): boolean {
+  return /HTTP 429|rate limited/i.test(message);
 }
 
 async function requestUrl(
@@ -339,28 +371,37 @@ async function requestUrl(
   apiKey: string | null,
   body?: unknown,
 ): Promise<{ status: number; body: unknown }> {
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method,
-      headers: authHeaders(apiKey),
-      cache: "no-store",
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    throw new Error(
-      `BookingQube ${method} network error — ${url} — ${detail}. Check the URL and that the server can reach BookingQube.`,
-    );
+  let attempt = 0;
+  while (true) {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers: authHeaders(apiKey),
+        cache: "no-store",
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `BookingQube ${method} network error — ${url} — ${detail}. Check the URL and that the server can reach BookingQube.`,
+      );
+    }
+    const text = await res.text();
+    let parsed: unknown;
+    try {
+      parsed = text ? JSON.parse(text) : {};
+    } catch {
+      parsed = { message: text };
+    }
+    if (res.status === 429 && attempt < RATE_LIMIT_MAX_RETRIES) {
+      const delayMs = rateLimitBackoffMs(attempt, res.headers.get("Retry-After"));
+      await sleep(delayMs);
+      attempt++;
+      continue;
+    }
+    return { status: res.status, body: parsed };
   }
-  const text = await res.text();
-  let parsed: unknown;
-  try {
-    parsed = text ? JSON.parse(text) : {};
-  } catch {
-    parsed = { message: text };
-  }
-  return { status: res.status, body: parsed };
 }
 
 async function requestBookingQube(

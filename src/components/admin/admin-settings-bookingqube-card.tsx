@@ -724,6 +724,7 @@ export const AdminSettingsBookingQubeCard = forwardRef<
       synced: number;
       skipped?: number;
       failed: number;
+      rateLimited?: number;
       total: number;
       errors?: { registrationId: string; error: string }[];
     },
@@ -750,8 +751,16 @@ export const AdminSettingsBookingQubeCard = forwardRef<
     }
     if (res.failed > 0) parts.push(`${res.failed} failed`);
     let message = `${parts.join(", ")} of ${res.total}.`;
+    const rateLimited = res.rateLimited ?? 0;
+    const mostlyRateLimited =
+      res.failed > 0 && rateLimited >= Math.max(1, Math.ceil(res.failed * 0.5));
     if (res.failed > 0) {
-      message += " Open sync log (Errors) for details.";
+      if (mostlyRateLimited) {
+        message +=
+          " BookingQube rate limit — wait a minute, then run Resync all again for the failures.";
+      } else {
+        message += " Open sync log (Errors) for details.";
+      }
       const sample = res.errors?.[0];
       if (sample) {
         const idShort = `${sample.registrationId.slice(0, 8)}…`;
