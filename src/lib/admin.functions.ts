@@ -2216,24 +2216,45 @@ async function fetchSyncedRegistrationIds(): Promise<Set<string>> {
   return synced;
 }
 
-async function listAllRegistrationIds(): Promise<string[]> {
+async function countAllRegistrations(): Promise<number> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { count, error } = await supabaseAdmin
+    .from("registrations")
+    .select("id", { count: "exact", head: true });
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+async function listAllRegistrationIds(): Promise<string[]> {
+  const total = await countAllRegistrations();
+  if (total === 0) return [];
   const ids: string[] = [];
   let offset = 0;
-  while (true) {
-    const { data, error } = await supabaseAdmin
-      .from("registrations")
-      .select("id")
-      .order("created_at", { ascending: true })
-      .range(offset, offset + UNSYNCED_PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
-    for (const row of data ?? []) {
-      ids.push(row.id);
-    }
-    if ((data?.length ?? 0) < UNSYNCED_PAGE_SIZE) break;
-    offset += UNSYNCED_PAGE_SIZE;
+  while (offset < total) {
+    const chunk = await listRegistrationIdsChunk(offset, UNSYNCED_PAGE_SIZE);
+    ids.push(...chunk.ids);
+    offset += chunk.ids.length;
+    if (chunk.ids.length === 0) break;
   }
   return ids;
+}
+
+async function listRegistrationIdsChunk(
+  offset: number,
+  limit: number,
+): Promise<{ ids: string[]; total: number }> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const total = await countAllRegistrations();
+  if (total === 0 || offset >= total) {
+    return { ids: [], total };
+  }
+  const { data, error } = await supabaseAdmin
+    .from("registrations")
+    .select("id")
+    .order("created_at", { ascending: true })
+    .range(offset, offset + limit - 1);
+  if (error) throw new Error(error.message);
+  return { ids: (data ?? []).map((row) => row.id), total };
 }
 
 async function listUnsyncedRegistrationIds(): Promise<string[]> {
@@ -2245,6 +2266,31 @@ async function listUnsyncedRegistrationIds(): Promise<string[]> {
 const BULK_BQ_SYNC_RESYNC_CONCURRENCY = 2;
 const BULK_BQ_SYNC_UNSYNCED_CONCURRENCY = 3;
 const BULK_BQ_SYNC_INTER_REQUEST_MS = 300;
+/** Max registrations per server-action chunk (stays under ~60s on Vercel). */
+export const BQ_BULK_SYNC_CHUNK_SIZE = 40;
+const BQ_BULK_SYNC_CHUNK_MAX = 50;
+
+export type BookingQubeBulkSyncChunkResult = {
+  synced: number;
+  skipped: number;
+  failed: number;
+  rateLimited: number;
+  processed: number;
+  offset: number;
+  total: number;
+  hasMore: boolean;
+  errors: { registrationId: string; error: string }[];
+};
+
+export type BookingQubeBulkSyncChunkError = { error: string };
+
+function bookingQubeBulkSyncChunkError(err: unknown): BookingQubeBulkSyncChunkError {
+  if (isBookingQubeIntegrationTableError(err as { message?: string; code?: string })) {
+    return { error: bookingQubeIntegrationTableErrorMessage() };
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  return { error: message || "Bulk sync chunk failed" };
+}
 
 function bulkSyncInterRequestDelay(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, BULK_BQ_SYNC_INTER_REQUEST_MS));
@@ -2381,6 +2427,81 @@ async function runBulkOutboundBookingQubeSync(
     total: ids.length,
     errors: errors.slice(0, 50),
   };
+}
+
+const bulkSyncChunkInputSchema = z.object({
+  offset: z.number().int().min(0).default(0),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(BQ_BULK_SYNC_CHUNK_MAX)
+    .default(BQ_BULK_SYNC_CHUNK_SIZE),
+  forceResync: z.boolean().optional(),
+});
+
+async function listUnsyncedRegistrationIdsChunk(
+  offset: number,
+  limit: number,
+): Promise<{ ids: string[]; total: number }> {
+  const all = await listUnsyncedRegistrationIds();
+  return { ids: all.slice(offset, offset + limit), total: all.length };
+}
+
+/** Process one page of unsynced registrations (client orchestrates chunks). */
+export async function adminSyncUnsyncedRegistrationsChunk(
+  input?: z.infer<typeof bulkSyncChunkInputSchema>,
+): Promise<BookingQubeBulkSyncChunkResult | BookingQubeBulkSyncChunkError> {
+  try {
+    await adminContext();
+    const data = bulkSyncChunkInputSchema.parse(input ?? {});
+    const { ids, total } = await listUnsyncedRegistrationIdsChunk(data.offset, data.limit);
+    const bulk = await runBulkOutboundBookingQubeSync(ids, {
+      forceResync: data.forceResync ?? false,
+    });
+    const processed = ids.length;
+    return {
+      synced: bulk.synced,
+      skipped: bulk.skipped,
+      failed: bulk.failed,
+      rateLimited: bulk.rateLimited,
+      processed,
+      offset: data.offset,
+      total,
+      hasMore: data.offset + processed < total,
+      errors: bulk.errors,
+    };
+  } catch (err) {
+    return bookingQubeBulkSyncChunkError(err);
+  }
+}
+
+/** Process one page of all registrations for resync-all (client orchestrates chunks). */
+export async function adminResyncRegistrationsChunk(
+  input?: z.infer<typeof bulkSyncChunkInputSchema>,
+): Promise<BookingQubeBulkSyncChunkResult | BookingQubeBulkSyncChunkError> {
+  try {
+    await adminContext();
+    const data = bulkSyncChunkInputSchema.parse(input ?? {});
+    const { ids, total } = await listRegistrationIdsChunk(data.offset, data.limit);
+    const bulk = await runBulkOutboundBookingQubeSync(ids, {
+      forceResync: data.forceResync ?? true,
+    });
+    const processed = ids.length;
+    return {
+      synced: bulk.synced,
+      skipped: bulk.skipped,
+      failed: bulk.failed,
+      rateLimited: bulk.rateLimited,
+      processed,
+      offset: data.offset,
+      total,
+      hasMore: data.offset + processed < total,
+      errors: bulk.errors,
+    };
+  } catch (err) {
+    return bookingQubeBulkSyncChunkError(err);
+  }
 }
 
 /** Push every unsynced registration to BookingQube POST (concurrency 3, paced). */

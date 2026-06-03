@@ -46,8 +46,11 @@ import {
   adminGetBookingQubeFieldMappings,
   adminGetBookingQubeSettings,
   adminListBookingQubeSyncLogs,
-  adminResyncAllRegistrations,
-  adminSyncUnsyncedRegistrations,
+  adminResyncRegistrationsChunk,
+  adminSyncUnsyncedRegistrationsChunk,
+  BQ_BULK_SYNC_CHUNK_SIZE,
+  type BookingQubeBulkSyncChunkError,
+  type BookingQubeBulkSyncChunkResult,
   adminListEvents,
   adminSaveBookingQubeFieldMappings,
   adminSaveBookingQubeSettings,
@@ -75,8 +78,32 @@ import {
   type BookingQubeSchemaField,
 } from "@/lib/bookingqube.mapping";
 
-const BQ_ADMIN_SELECTED_EVENT_KEY = "bq-admin-selected-event";
 import { formatActionError } from "@/lib/utils";
+
+const BQ_ADMIN_SELECTED_EVENT_KEY = "bq-admin-selected-event";
+const BQ_CHUNK_PAUSE_MS = 800;
+
+type BulkSyncProgress = {
+  chunkIndex: number;
+  totalChunks: number;
+  processed: number;
+  total: number;
+};
+
+function isBookingQubeChunkError(
+  res: BookingQubeBulkSyncChunkResult | BookingQubeBulkSyncChunkError,
+): res is BookingQubeBulkSyncChunkError {
+  return "error" in res && !("hasMore" in res);
+}
+
+type BulkSyncAggregate = {
+  synced: number;
+  skipped: number;
+  failed: number;
+  rateLimited: number;
+  total: number;
+  errors: { registrationId: string; error: string }[];
+};
 
 export type AdminSettingsBookingQubeCardHandle = {
   /** Runs Step 1 GET test (saved GET URL). */
@@ -295,6 +322,7 @@ export const AdminSettingsBookingQubeCard = forwardRef<
   }>({});
   const [copySqlBusy, setCopySqlBusy] = useState(false);
   const [resyncAllDialogOpen, setResyncAllDialogOpen] = useState(false);
+  const [bulkSyncProgress, setBulkSyncProgress] = useState<BulkSyncProgress | null>(null);
   const lastLoadedEventIdRef = useRef<string>("");
 
   const events = eventsData?.events ?? [];
@@ -718,6 +746,11 @@ export const AdminSettingsBookingQubeCard = forwardRef<
   const totalRegistrationCount =
     allRegsData?.tablesReady !== false ? (allRegsData?.count ?? 0) : 0;
   const canBulkSync = tablesReady && enabled && Boolean(postApiUrl.trim());
+  const bulkSyncRunning = busy === "bulk-sync" || busy === "resync-all";
+  const bulkSyncPercent =
+    bulkSyncProgress && bulkSyncProgress.total > 0
+      ? Math.round((bulkSyncProgress.processed / bulkSyncProgress.total) * 100)
+      : 0;
 
   const formatBulkSyncToast = (
     res: {
@@ -774,10 +807,72 @@ export const AdminSettingsBookingQubeCard = forwardRef<
     toast.warning(message);
   };
 
+  const runChunkedOutboundSync = async (mode: "unsynced" | "resync-all"): Promise<BulkSyncAggregate> => {
+    const chunkFn =
+      mode === "resync-all"
+        ? adminResyncRegistrationsChunk
+        : adminSyncUnsyncedRegistrationsChunk;
+    let offset = 0;
+    let total = 0;
+    const aggregate: BulkSyncAggregate = {
+      synced: 0,
+      skipped: 0,
+      failed: 0,
+      rateLimited: 0,
+      total: 0,
+      errors: [],
+    };
+
+    for (let chunkIndex = 1; ; chunkIndex++) {
+      const res = await chunkFn({
+        offset,
+        limit: BQ_BULK_SYNC_CHUNK_SIZE,
+        forceResync: mode === "resync-all",
+      });
+      if (isBookingQubeChunkError(res)) {
+        throw new Error(res.error);
+      }
+
+      total = res.total;
+      aggregate.synced += res.synced;
+      aggregate.skipped += res.skipped;
+      aggregate.failed += res.failed;
+      aggregate.rateLimited += res.rateLimited;
+      aggregate.errors.push(...res.errors);
+      if (aggregate.errors.length > 50) {
+        aggregate.errors = aggregate.errors.slice(0, 50);
+      }
+
+      const processed = offset + res.processed;
+      const totalChunks = Math.max(1, Math.ceil(total / BQ_BULK_SYNC_CHUNK_SIZE));
+      setBulkSyncProgress({
+        chunkIndex: Math.min(chunkIndex, totalChunks),
+        totalChunks,
+        processed,
+        total,
+      });
+
+      if (res.failed > 0) {
+        await refetchLogs();
+      }
+
+      if (!res.hasMore) {
+        aggregate.total = total;
+        break;
+      }
+
+      offset += res.processed;
+      await new Promise((resolve) => setTimeout(resolve, BQ_CHUNK_PAUSE_MS));
+    }
+
+    return aggregate;
+  };
+
   const syncAllUnsynced = async () => {
     setBusy("bulk-sync");
+    setBulkSyncProgress(null);
     try {
-      const res = await adminSyncUnsyncedRegistrations();
+      const res = await runChunkedOutboundSync("unsynced");
       if (res.total === 0) {
         toast.success("All registrations are already synced to BookingQube");
       } else {
@@ -789,13 +884,15 @@ export const AdminSettingsBookingQubeCard = forwardRef<
       toast.error(formatActionError(e));
     } finally {
       setBusy(null);
+      setBulkSyncProgress(null);
     }
   };
 
   const resyncAllAgain = async () => {
     setBusy("resync-all");
+    setBulkSyncProgress(null);
     try {
-      const res = await adminResyncAllRegistrations();
+      const res = await runChunkedOutboundSync("resync-all");
       formatBulkSyncToast(res, { resyncAll: true });
       if (res.failed > 0) setSyncLogFilter("errors");
       await Promise.all([refetchLogs(), refetchUnsynced()]);
@@ -803,6 +900,7 @@ export const AdminSettingsBookingQubeCard = forwardRef<
       toast.error(formatActionError(e));
     } finally {
       setBusy(null);
+      setBulkSyncProgress(null);
       setResyncAllDialogOpen(false);
     }
   };
@@ -1206,13 +1304,13 @@ export const AdminSettingsBookingQubeCard = forwardRef<
               loading={busy === "bulk-sync"}
               onClick={() => void syncAllUnsynced()}
               primary
-              disabled={!canBulkSync}
+              disabled={!canBulkSync || bulkSyncRunning}
             />
             <AdminSettingsActionBtn
               label="Resync all again"
               loading={busy === "resync-all"}
               onClick={() => setResyncAllDialogOpen(true)}
-              disabled={!canBulkSync || totalRegistrationCount === 0}
+              disabled={!canBulkSync || totalRegistrationCount === 0 || bulkSyncRunning}
             />
             <button
               type="button"
@@ -1222,7 +1320,32 @@ export const AdminSettingsBookingQubeCard = forwardRef<
               View sync log
             </button>
           </div>
-          <AlertDialog open={resyncAllDialogOpen} onOpenChange={setResyncAllDialogOpen}>
+          {bulkSyncProgress && bulkSyncRunning ? (
+            <div className="mt-4 space-y-2 rounded-[12px] border border-[#e2e8f0] bg-white px-3 py-3">
+              <p className="text-xs font-semibold text-[#134e4a]">
+                Chunk {bulkSyncProgress.chunkIndex}/{bulkSyncProgress.totalChunks} —{" "}
+                {bulkSyncProgress.processed}/{bulkSyncProgress.total} registrations
+              </p>
+              <div
+                className="h-2 overflow-hidden rounded-full bg-[#e2e8f0]"
+                role="progressbar"
+                aria-valuenow={bulkSyncPercent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <div
+                  className="h-full rounded-full bg-[#0d9488] transition-[width] duration-300"
+                  style={{ width: `${bulkSyncPercent}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
+          <AlertDialog
+            open={resyncAllDialogOpen}
+            onOpenChange={(open) => {
+              if (busy !== "resync-all") setResyncAllDialogOpen(open);
+            }}
+          >
             <AlertDialogContent className="max-w-md rounded-[20px]">
               <AlertDialogHeader>
                 <AlertDialogTitle className="font-display text-xl text-[#134e4a]">
@@ -1234,11 +1357,25 @@ export const AdminSettingsBookingQubeCard = forwardRef<
                     {totalRegistrationCount} registration
                     {totalRegistrationCount === 1 ? "" : "s"}
                   </span>{" "}
-                  to BookingQube, including ones already marked as synced. Every registration is
-                  POSTed again; if BookingQube reports the email is already registered, it is
-                  counted as synced.
+                  to BookingQube in chunks of {BQ_BULK_SYNC_CHUNK_SIZE}, including ones already
+                  marked as synced. Every registration is POSTed again; if BookingQube reports the
+                  email is already registered, it is counted as synced.
                 </AlertDialogDescription>
               </AlertDialogHeader>
+              {bulkSyncProgress && busy === "resync-all" ? (
+                <div className="space-y-2 px-1">
+                  <p className="text-xs font-semibold text-[#134e4a]">
+                    Chunk {bulkSyncProgress.chunkIndex}/{bulkSyncProgress.totalChunks} —{" "}
+                    {bulkSyncProgress.processed}/{bulkSyncProgress.total}
+                  </p>
+                  <div className="h-2 overflow-hidden rounded-full bg-[#e2e8f0]">
+                    <div
+                      className="h-full rounded-full bg-[#0d9488] transition-[width] duration-300"
+                      style={{ width: `${bulkSyncPercent}%` }}
+                    />
+                  </div>
+                </div>
+              ) : null}
               <AlertDialogFooter className="gap-2 sm:gap-2">
                 <AlertDialogCancel
                   disabled={busy === "resync-all"}
