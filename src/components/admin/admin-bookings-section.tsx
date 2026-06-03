@@ -179,6 +179,8 @@ export function AdminBookingsSection() {
         f.eventId ||
         f.slotId ||
         f.status ||
+        f.nationality ||
+        f.ageGroup ||
         f.dateFrom ||
         f.dateTo,
     );
@@ -347,6 +349,8 @@ export function AdminBookingsSection() {
     tableFilters.filters.eventId,
     tableFilters.filters.slotId,
     tableFilters.filters.status,
+    tableFilters.filters.nationality,
+    tableFilters.filters.ageGroup,
     tableFilters.filters.dateFrom,
     tableFilters.filters.dateTo,
     tableFilters.mode,

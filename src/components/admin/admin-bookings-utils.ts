@@ -1,5 +1,17 @@
 import { format, isValid, parseISO } from "date-fns";
 import type { AdminRegistrationRow } from "@/lib/admin-filter-utils";
+import { posAgeGroupLabel, posNationalityLabel } from "@/lib/pos-customer-demographics";
+import type { PosAgeGroup, PosNationality } from "@/lib/pos-customer-demographics";
+
+export function registrationNationalityLabel(value?: string | null): string {
+  if (!value) return "—";
+  return posNationalityLabel(value as PosNationality);
+}
+
+export function registrationAgeGroupLabel(value?: string | null): string {
+  if (!value) return "—";
+  return posAgeGroupLabel(value as PosAgeGroup);
+}
 
 /** Matches POS/public insert: `new Date(\`${bookingDate}T12:00:00\`)` for per-day capacity. */
 export function isCreatedAtCapacityAnchor(iso: string): boolean {

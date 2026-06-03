@@ -307,6 +307,7 @@ export type Database = {
       }
       registrations: {
         Row: {
+          age_group: string | null
           created_at: string
           customer_name: string
           email: string | null
@@ -315,11 +316,13 @@ export type Database = {
           guest_count: number
           id: string
           mobile: string
+          nationality: string | null
           qr_token: string
           slot_id: string
           status: Database["public"]["Enums"]["registration_status"]
         }
         Insert: {
+          age_group?: string | null
           created_at?: string
           customer_name: string
           email?: string | null
@@ -328,11 +331,13 @@ export type Database = {
           guest_count?: number
           id?: string
           mobile: string
+          nationality?: string | null
           qr_token?: string
           slot_id: string
           status?: Database["public"]["Enums"]["registration_status"]
         }
         Update: {
+          age_group?: string | null
           created_at?: string
           customer_name?: string
           email?: string | null
@@ -341,6 +346,7 @@ export type Database = {
           guest_count?: number
           id?: string
           mobile?: string
+          nationality?: string | null
           qr_token?: string
           slot_id?: string
           status?: Database["public"]["Enums"]["registration_status"]

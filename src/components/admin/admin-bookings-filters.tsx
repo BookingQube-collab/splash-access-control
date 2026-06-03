@@ -8,6 +8,7 @@ import { ADMIN_CARD, ADMIN_TEAL } from "@/components/admin/admin-theme";
 import { cn } from "@/lib/utils";
 import type { AdminFilterChip } from "@/hooks/use-admin-table-filters";
 import type { AdminFilterMode, AdminTableFilters } from "@/lib/admin-filters.types";
+import { POS_AGE_GROUP_OPTIONS, POS_NATIONALITY_OPTIONS } from "@/lib/pos-customer-demographics";
 
 const fieldClass =
   "h-11 w-full rounded-[14px] border border-[#e2e8f0] bg-white text-sm font-medium text-[#134e4a] shadow-sm outline-none transition placeholder:text-[#94a3b8] hover:border-[#cbd5e1] focus:border-[#0d9488] focus:ring-2 focus:ring-[#0d9488]/15";
@@ -132,6 +133,39 @@ export function AdminBookingsFilters({
                 />
               </div>
             </div>
+          </div>
+
+          <div className="lg:col-span-2">
+            <Label className={filterLabelClass}>Nationality</Label>
+            <SearchableSelect
+              value={filters.nationality}
+              onChange={(v) => onFiltersChange({ nationality: v })}
+              placeholder="All"
+              searchable={false}
+              options={[
+                { value: "", label: "All nationalities" },
+                ...POS_NATIONALITY_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+              ]}
+              className={selectClass}
+            />
+          </div>
+
+          <div className="lg:col-span-2">
+            <Label className={filterLabelClass}>Age group</Label>
+            <SearchableSelect
+              value={filters.ageGroup}
+              onChange={(v) => onFiltersChange({ ageGroup: v })}
+              placeholder="All"
+              searchable={false}
+              options={[
+                { value: "", label: "All age groups" },
+                ...POS_AGE_GROUP_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: `${o.label} (${o.range})`,
+                })),
+              ]}
+              className={selectClass}
+            />
           </div>
         </div>
 

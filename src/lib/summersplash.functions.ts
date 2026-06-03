@@ -1026,7 +1026,12 @@ export async function getScannerSidePanelData(limit = 20) {
   };
 }
 
+const posNationalitySchema = z.enum(["resident", "tourist"]);
+const posAgeGroupSchema = z.enum(["child", "teen", "adult", "senior"]);
+
 const posRegisterSchema = registerSchema.extend({
+  nationality: posNationalitySchema,
+  age_group: posAgeGroupSchema,
   auto_check_in: z.boolean().optional(),
   skip_email: z.boolean().optional(),
   send_email: z.boolean().optional(),
@@ -1074,6 +1079,8 @@ export async function posRegister(input: z.infer<typeof posRegisterSchema>) {
       customer_name: data.customer_name,
       mobile: data.mobile,
       email: effectiveEmail,
+      nationality: data.nationality,
+      age_group: data.age_group,
       guest_count: data.guest_count,
       created_at: createdAt,
     })

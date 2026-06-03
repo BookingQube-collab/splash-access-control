@@ -17,6 +17,8 @@ import {
   emailDisplayStatus,
   formatBookingsUpdatedLabel,
   formatRegistrationWhen,
+  registrationAgeGroupLabel,
+  registrationNationalityLabel,
 } from "@/components/admin/admin-bookings-utils";
 import { formatSlotTimeHint, type AdminSlotRow } from "@/components/admin/admin-slots-utils";
 import type { AdminRegistrationRow } from "@/lib/admin-filter-utils";
@@ -25,6 +27,8 @@ import { cn } from "@/lib/utils";
 const HEADERS = [
   "Name",
   "Mobile",
+  "Nationality",
+  "Age group",
   "Event",
   "Slot",
   "Guests",
@@ -134,7 +138,7 @@ export function AdminBookingsTable({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1060px] border-collapse text-sm">
+        <table className="w-full min-w-[1240px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-[#f1f5f9]">
               {HEADERS.map((h) => (
@@ -174,6 +178,12 @@ export function AdminBookingsTable({
                       {r.customer_name}
                     </td>
                     <td className="px-5 py-5 text-[#64748b]">{r.mobile}</td>
+                    <td className="px-5 py-5 text-[#64748b]">
+                      {registrationNationalityLabel(r.nationality)}
+                    </td>
+                    <td className="px-5 py-5 text-[#64748b]">
+                      {registrationAgeGroupLabel(r.age_group)}
+                    </td>
                     <td className="px-5 py-5 font-medium text-[#475569]">
                       {r.slots?.events?.name ?? "—"}
                     </td>

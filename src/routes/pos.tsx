@@ -20,6 +20,14 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { isPastRegistrationBooking, passBookingDate } from "@/lib/pass-active";
 import { isSlotPastForDate, pickDefaultPosSlotId } from "@/lib/slot-time";
+import {
+  POS_DEFAULT_AGE_GROUP,
+  POS_DEFAULT_NATIONALITY,
+  posAgeGroupLabel,
+  posNationalityLabel,
+  type PosAgeGroup,
+  type PosNationality,
+} from "@/lib/pos-customer-demographics";
 import { getPublicEvent, posRegister } from "@/lib/summersplash.functions";
 import { usePosCustomerLookup } from "@/hooks/use-pos-customer-lookup";
 import { tryPrintEntryPass } from "@/lib/zebra/print-entry-pass";
@@ -228,6 +236,8 @@ function POS() {
   const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
   const [email, setEmail] = useState("");
+  const [nationality, setNationality] = useState<PosNationality>(POS_DEFAULT_NATIONALITY);
+  const [ageGroup, setAgeGroup] = useState<PosAgeGroup>(POS_DEFAULT_AGE_GROUP);
   const [guests, setGuests] = useState(1);
 
   const nameEditedRef = useRef(false);
@@ -285,6 +295,8 @@ function POS() {
       setName("");
       setMobile("");
       setEmail("");
+      setNationality(POS_DEFAULT_NATIONALITY);
+      setAgeGroup(POS_DEFAULT_AGE_GROUP);
       setGuests(1);
       nameEditedRef.current = false;
       emailEditedRef.current = false;
@@ -597,6 +609,8 @@ function POS() {
         customer_name: displayName,
         mobile: mobile.trim(),
         email: email.trim(),
+        nationality,
+        age_group: ageGroup,
         guest_count: guests,
         booking_date: activeDate,
         auto_check_in: autoScanAfterRegister,
@@ -619,6 +633,8 @@ function POS() {
         setName("");
         setMobile("");
         setEmail("");
+        setNationality(POS_DEFAULT_NATIONALITY);
+        setAgeGroup(POS_DEFAULT_AGE_GROUP);
         nameEditedRef.current = false;
         emailEditedRef.current = false;
         lastLookupKeyRef.current = "";
@@ -761,6 +777,10 @@ function POS() {
                 mobile={mobile}
                 onMobileChange={handleMobileChange}
                 onMobileBlur={flushMobileLookup}
+                nationality={nationality}
+                onNationalityChange={setNationality}
+                ageGroup={ageGroup}
+                onAgeGroupChange={setAgeGroup}
                 name={name}
                 onNameChange={(v) => {
                   nameEditedRef.current = true;
@@ -844,6 +864,8 @@ function POS() {
         displayName={displayName}
         mobile={mobile}
         email={email}
+        nationalityLabel={posNationalityLabel(nationality)}
+        ageGroupLabel={posAgeGroupLabel(ageGroup)}
         slotName={slot?.name}
         guests={guests}
         submitting={submitting}

@@ -12,6 +12,8 @@ export function PosConfirmDialog({
   displayName,
   mobile,
   email,
+  nationalityLabel,
+  ageGroupLabel,
   slotName,
   guests,
   submitting,
@@ -23,6 +25,8 @@ export function PosConfirmDialog({
   displayName: string;
   mobile: string;
   email: string;
+  nationalityLabel: string;
+  ageGroupLabel: string;
   slotName?: string;
   guests: number;
   submitting: boolean;
@@ -56,6 +60,8 @@ export function PosConfirmDialog({
             <PosRow label="Date" value={activeDate ?? "—"} />
             <PosRow label="Customer" value={displayName} />
             <PosRow label="Mobile" value={mobile} />
+            <PosRow label="Nationality" value={nationalityLabel} />
+            <PosRow label="Age group" value={ageGroupLabel} />
             {email ? <PosRow label="Email" value={email} /> : null}
             <PosRow label="Slot" value={slotName ?? "—"} />
             <PosRow

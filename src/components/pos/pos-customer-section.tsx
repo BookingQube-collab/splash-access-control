@@ -1,10 +1,16 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Loader2, Mail, Phone, QrCode, ScanLine, User } from "lucide-react";
+import { ChevronDown, Globe, Loader2, Mail, Phone, QrCode, ScanLine, User, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { IntlPhoneInput } from "@/components/phone-input";
 import { PosField } from "@/components/pos/pos-shared";
+import {
+  POS_AGE_GROUP_OPTIONS,
+  POS_NATIONALITY_OPTIONS,
+  type PosAgeGroup,
+  type PosNationality,
+} from "@/lib/pos-customer-demographics";
 import { cn } from "@/lib/utils";
 
 export type PosRegistration = {
@@ -22,7 +28,44 @@ export type PosRegistration = {
 };
 
 const INPUT_CLASS = "pos-input h-10 w-full rounded-xl border text-sm text-[#0a4a52]";
+const SELECT_CLASS =
+  "pos-input pos-customer-select h-10 w-full min-w-0 cursor-pointer appearance-none truncate rounded-xl border py-0 pl-3 pr-9 text-sm text-[#0a4a52]";
 const LOCKED_INPUT_CLASS = "cursor-not-allowed opacity-70";
+
+function PosSelectField({
+  icon,
+  label,
+  value,
+  onChange,
+  disabled,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <PosField icon={icon} label={label}>
+      <div className="relative min-w-0">
+        <ChevronDown
+          className="pointer-events-none absolute right-2.5 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-[#5a7a80]"
+          aria-hidden
+        />
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          className={cn(SELECT_CLASS, disabled && LOCKED_INPUT_CLASS)}
+        >
+          {children}
+        </select>
+      </div>
+    </PosField>
+  );
+}
 
 export function PosCustomerSection({
   scanInput,
@@ -32,6 +75,10 @@ export function PosCustomerSection({
   mobile,
   onMobileChange,
   onMobileBlur,
+  nationality,
+  onNationalityChange,
+  ageGroup,
+  onAgeGroupChange,
   name,
   onNameChange,
   email,
@@ -46,6 +93,10 @@ export function PosCustomerSection({
   mobile: string;
   onMobileChange: (v: string) => void;
   onMobileBlur?: () => void;
+  nationality: PosNationality;
+  onNationalityChange: (v: PosNationality) => void;
+  ageGroup: PosAgeGroup;
+  onAgeGroupChange: (v: PosAgeGroup) => void;
   name: string;
   onNameChange: (v: string) => void;
   email: string;
@@ -104,6 +155,34 @@ export function PosCustomerSection({
           disabled={locked}
         />
       </PosField>
+
+      <div className="grid min-w-0 grid-cols-2 gap-2">
+        <PosSelectField
+          icon={<Globe className="h-3.5 w-3.5 text-[#00a8b5]" />}
+          label="Nationality"
+          value={nationality}
+          onChange={(v) => onNationalityChange(v as PosNationality)}
+        >
+          {POS_NATIONALITY_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </PosSelectField>
+
+        <PosSelectField
+          icon={<Users className="h-3.5 w-3.5 text-[#00a8b5]" />}
+          label="Age group"
+          value={ageGroup}
+          onChange={(v) => onAgeGroupChange(v as PosAgeGroup)}
+        >
+          {POS_AGE_GROUP_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label} ({o.range})
+            </option>
+          ))}
+        </PosSelectField>
+      </div>
 
       <PosField icon={<User className="h-3.5 w-3.5 text-[#00a8b5]" />} label="Full name">
         <div className="relative">

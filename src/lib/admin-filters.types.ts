@@ -5,6 +5,8 @@ export type AdminTableFilters = {
   eventId: string;
   slotId: string;
   status: string;
+  nationality: string;
+  ageGroup: string;
   dateFrom: string;
   dateTo: string;
 };
@@ -14,6 +16,8 @@ export const emptyAdminTableFilters = (): AdminTableFilters => ({
   eventId: "",
   slotId: "",
   status: "",
+  nationality: "",
+  ageGroup: "",
   dateFrom: "",
   dateTo: "",
 });
@@ -23,6 +27,8 @@ export type AdminServerFilters = {
   eventId?: string;
   slotId?: string;
   status?: string;
+  nationality?: string;
+  ageGroup?: string;
   dateFrom?: string;
   dateTo?: string;
   search?: string;
@@ -33,6 +39,8 @@ export function toServerFilters(f: AdminTableFilters): AdminServerFilters | unde
   if (f.eventId) out.eventId = f.eventId;
   if (f.slotId) out.slotId = f.slotId;
   if (f.status) out.status = f.status;
+  if (f.nationality) out.nationality = f.nationality;
+  if (f.ageGroup) out.ageGroup = f.ageGroup;
   if (f.dateFrom) out.dateFrom = f.dateFrom;
   if (f.dateTo) out.dateTo = f.dateTo;
   if (f.search.trim()) out.search = f.search.trim();
@@ -45,6 +53,8 @@ export function hasActiveFilters(f: AdminTableFilters): boolean {
     f.eventId ||
     f.slotId ||
     f.status ||
+    f.nationality ||
+    f.ageGroup ||
     f.dateFrom ||
     f.dateTo
   );

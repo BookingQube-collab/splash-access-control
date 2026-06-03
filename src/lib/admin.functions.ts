@@ -40,6 +40,8 @@ const adminListFiltersSchema = z
     dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     search: z.string().max(200).optional(),
+    nationality: z.enum(["resident", "tourist"]).optional(),
+    ageGroup: z.enum(["child", "teen", "adult", "senior"]).optional(),
   })
   .optional();
 
@@ -57,6 +59,8 @@ function registrationSlotJoin(parsed: ParsedRegistrationFilters) {
 function applyRegistrationListFilters(query: any, parsed: ParsedRegistrationFilters) {
   if (parsed?.slotId) query = query.eq("slot_id", parsed.slotId);
   if (parsed?.status) query = query.eq("status", parsed.status);
+  if (parsed?.nationality) query = query.eq("nationality", parsed.nationality);
+  if (parsed?.ageGroup) query = query.eq("age_group", parsed.ageGroup);
   if (parsed?.dateFrom || parsed?.dateTo) {
     const { startIso, endIso } = localCalendarRangeBoundsIso(parsed?.dateFrom, parsed?.dateTo);
     if (startIso) query = query.gte("created_at", startIso);
@@ -312,7 +316,8 @@ export async function adminListRegistrations(
 
   const slotJoin = registrationSlotJoin(parsed);
   const slotSelect = `${slotJoin}(id, name, capacity, starts_at, ends_at, event_id, events(id, name))`;
-  const baseCols = `id, customer_name, mobile, email, guest_count, status, created_at, qr_token, slot_id`;
+  const baseColsLegacy = `id, customer_name, mobile, email, guest_count, status, created_at, qr_token, slot_id`;
+  const baseColsWithDemo = `id, customer_name, mobile, email, nationality, age_group, guest_count, status, created_at, qr_token, slot_id`;
   const emailCols = `pass_email_status, pass_email_sent_at, pass_email_error`;
 
   const from = (page - 1) * pageSize;
@@ -325,11 +330,23 @@ export async function adminListRegistrations(
     return q.range(from, to);
   };
 
-  let { data, error, count } = await runList(`${baseCols}, ${emailCols}, ${slotSelect}`);
+  let selectCols = `${baseColsWithDemo}, ${emailCols}, ${slotSelect}`;
+  let { data, error, count } = await runList(selectCols);
 
-  // Back-compat: pass_email_* columns may not be migrated yet.
+  // Back-compat: optional columns may not be migrated yet.
   if (error && /pass_email_/.test(error.message ?? "")) {
-    ({ data, error, count } = await runList(`${baseCols}, ${slotSelect}`));
+    selectCols = `${baseColsWithDemo}, ${slotSelect}`;
+    ({ data, error, count } = await runList(selectCols));
+  }
+  if (error && /(nationality|age_group)/.test(error.message ?? "")) {
+    selectCols = selectCols.includes(emailCols)
+      ? `${baseColsLegacy}, ${emailCols}, ${slotSelect}`
+      : `${baseColsLegacy}, ${slotSelect}`;
+    ({ data, error, count } = await runList(selectCols));
+  }
+  if (error && /pass_email_/.test(error.message ?? "")) {
+    selectCols = `${baseColsLegacy}, ${slotSelect}`;
+    ({ data, error, count } = await runList(selectCols));
   }
   if (error) throw new Error(error.message);
   return { registrations: data ?? [], total: count ?? 0 };

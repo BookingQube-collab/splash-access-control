@@ -369,6 +369,11 @@ html {
     box-shadow: 0 0 0 2px rgb(0 168 181 / 0.25);
     border-color: #00a8b5;
   }
+  .pos-page .pos-customer-select:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgb(0 168 181 / 0.25);
+    border-color: #00a8b5;
+  }
   .pos-page-phone.rip-wrap {
     --react-international-phone-height: 2.75rem;
     --react-international-phone-text-color: #0a4a52;

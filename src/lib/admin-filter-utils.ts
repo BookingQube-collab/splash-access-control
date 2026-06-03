@@ -2,6 +2,8 @@ import { format, parseISO } from "date-fns";
 import type { AdminFilterChip } from "@/hooks/use-admin-table-filters";
 import type { AdminTableFilters } from "@/lib/admin-filters.types";
 import { registrationStatusLabel } from "@/lib/admin-filters.types";
+import { posAgeGroupLabel, posNationalityLabel } from "@/lib/pos-customer-demographics";
+import type { PosAgeGroup, PosNationality } from "@/lib/pos-customer-demographics";
 
 export type AdminRegistrationRow = {
   id: string;
@@ -9,6 +11,8 @@ export type AdminRegistrationRow = {
   mobile: string;
   email?: string | null;
   guest_count: number;
+  nationality?: string | null;
+  age_group?: string | null;
   status: string;
   created_at: string;
   qr_token: string;
@@ -73,13 +77,23 @@ export function filterRegistrationRow(
   if (f.eventId && slot?.event_id !== f.eventId && slot?.events?.id !== f.eventId) return false;
   if (f.slotId && row.slot_id !== f.slotId && slot?.id !== f.slotId) return false;
   if (f.status && row.status !== f.status) return false;
+  if (f.nationality && row.nationality !== f.nationality) return false;
+  if (f.ageGroup && row.age_group !== f.ageGroup) return false;
   if (!matchesDateRange(row.created_at, f.dateFrom, f.dateTo)) return false;
 
   if (search) {
+    const nationalityLabel = row.nationality
+      ? posNationalityLabel(row.nationality as PosNationality)
+      : "";
+    const ageGroupLabel = row.age_group ? posAgeGroupLabel(row.age_group as PosAgeGroup) : "";
     const blob = [
       row.customer_name,
       row.mobile,
       row.email ?? "",
+      row.nationality ?? "",
+      nationalityLabel,
+      row.age_group ?? "",
+      ageGroupLabel,
       eventName,
       slotName,
       row.status,
@@ -124,6 +138,18 @@ export function buildRegistrationFilterChips(
   if (f.eventId) chips.push({ key: "eventId", label: `Event: ${eventLabel(f.eventId)}` });
   if (f.slotId) chips.push({ key: "slotId", label: `Slot: ${slotLabel(f.slotId)}` });
   if (f.status) chips.push({ key: "status", label: `Status: ${registrationStatusLabel(f.status)}` });
+  if (f.nationality) {
+    chips.push({
+      key: "nationality",
+      label: `Nationality: ${posNationalityLabel(f.nationality as PosNationality)}`,
+    });
+  }
+  if (f.ageGroup) {
+    chips.push({
+      key: "ageGroup",
+      label: `Age group: ${posAgeGroupLabel(f.ageGroup as PosAgeGroup)}`,
+    });
+  }
   if (f.dateFrom) chips.push({ key: "dateFrom", label: `From: ${f.dateFrom}` });
   if (f.dateTo) chips.push({ key: "dateTo", label: `To: ${f.dateTo}` });
   return chips;
