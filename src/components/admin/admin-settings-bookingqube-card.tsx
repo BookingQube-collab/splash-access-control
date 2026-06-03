@@ -12,6 +12,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Globe, KeyRound, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { SecretInput } from "@/components/secret-input";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -30,12 +39,14 @@ import {
   adminSettingsLabelClass,
 } from "@/components/admin/admin-settings-section";
 import {
+  adminCountAllRegistrations,
   adminCountUnsyncedRegistrations,
   adminFetchBookingQubeForm,
   adminGetBookingQubeBootstrapSql,
   adminGetBookingQubeFieldMappings,
   adminGetBookingQubeSettings,
   adminListBookingQubeSyncLogs,
+  adminResyncAllRegistrations,
   adminSyncUnsyncedRegistrations,
   adminListEvents,
   adminSaveBookingQubeFieldMappings,
@@ -253,6 +264,11 @@ export const AdminSettingsBookingQubeCard = forwardRef<
     queryFn: () => adminCountUnsyncedRegistrations(),
     enabled: tablesReady,
   });
+  const { data: allRegsData } = useQuery({
+    queryKey: ["bq-all-registrations-count"],
+    queryFn: () => adminCountAllRegistrations(),
+    enabled: tablesReady,
+  });
 
   const [enabled, setEnabled] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState("");
@@ -273,6 +289,7 @@ export const AdminSettingsBookingQubeCard = forwardRef<
     title?: string;
   }>({});
   const [copySqlBusy, setCopySqlBusy] = useState(false);
+  const [resyncAllDialogOpen, setResyncAllDialogOpen] = useState(false);
   const lastLoadedEventIdRef = useRef<string>("");
 
   const events = eventsData?.events ?? [];
@@ -693,7 +710,34 @@ export const AdminSettingsBookingQubeCard = forwardRef<
   const connected = enabled && configured && linked;
   const unsyncedCount =
     unsyncedData?.tablesReady !== false ? (unsyncedData?.count ?? 0) : 0;
+  const totalRegistrationCount =
+    allRegsData?.tablesReady !== false ? (allRegsData?.count ?? 0) : 0;
   const canBulkSync = tablesReady && enabled && Boolean(postApiUrl.trim());
+
+  const formatBulkSyncToast = (res: {
+    synced: number;
+    skipped?: number;
+    failed: number;
+    total: number;
+  }) => {
+    if (res.total === 0) {
+      toast.success("No registrations to sync");
+      return;
+    }
+    if (res.failed === 0 && (res.skipped ?? 0) === 0) {
+      toast.success(
+        `Synced ${res.synced} registration${res.synced === 1 ? "" : "s"} to BookingQube`,
+      );
+      return;
+    }
+    const parts: string[] = [];
+    if (res.synced > 0) parts.push(`${res.synced} synced`);
+    if ((res.skipped ?? 0) > 0) {
+      parts.push(`${res.skipped} skipped (email already registered)`);
+    }
+    if (res.failed > 0) parts.push(`${res.failed} failed`);
+    toast.warning(`${parts.join(", ")} of ${res.total}. See sync log for details.`);
+  };
 
   const syncAllUnsynced = async () => {
     setBusy("bulk-sync");
@@ -701,30 +745,28 @@ export const AdminSettingsBookingQubeCard = forwardRef<
       const res = await adminSyncUnsyncedRegistrations();
       if (res.total === 0) {
         toast.success("All registrations are already synced to BookingQube");
-      } else if (res.failed === 0 && (res.skipped ?? 0) === 0) {
-        toast.success(`Synced ${res.synced} registration${res.synced === 1 ? "" : "s"} to BookingQube`);
       } else {
-        const parts: string[] = [];
-        if (res.synced > 0) {
-          parts.push(`${res.synced} synced`);
-        }
-        if ((res.skipped ?? 0) > 0) {
-          parts.push(
-            `${res.skipped} skipped (email already registered)`,
-          );
-        }
-        if (res.failed > 0) {
-          parts.push(`${res.failed} failed`);
-        }
-        toast.warning(
-          `${parts.join(", ")} of ${res.total}. See sync log for details.`,
-        );
+        formatBulkSyncToast(res);
       }
       await Promise.all([refetchLogs(), refetchUnsynced()]);
     } catch (e: unknown) {
       toast.error(formatActionError(e));
     } finally {
       setBusy(null);
+    }
+  };
+
+  const resyncAllAgain = async () => {
+    setBusy("resync-all");
+    try {
+      const res = await adminResyncAllRegistrations();
+      formatBulkSyncToast(res);
+      await Promise.all([refetchLogs(), refetchUnsynced()]);
+    } catch (e: unknown) {
+      toast.error(formatActionError(e));
+    } finally {
+      setBusy(null);
+      setResyncAllDialogOpen(false);
     }
   };
 
@@ -1129,6 +1171,12 @@ export const AdminSettingsBookingQubeCard = forwardRef<
               primary
               disabled={!canBulkSync}
             />
+            <AdminSettingsActionBtn
+              label="Resync all again"
+              loading={busy === "resync-all"}
+              onClick={() => setResyncAllDialogOpen(true)}
+              disabled={!canBulkSync || totalRegistrationCount === 0}
+            />
             <button
               type="button"
               onClick={() => syncLogRef?.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
@@ -1137,6 +1185,40 @@ export const AdminSettingsBookingQubeCard = forwardRef<
               View sync log
             </button>
           </div>
+          <AlertDialog open={resyncAllDialogOpen} onOpenChange={setResyncAllDialogOpen}>
+            <AlertDialogContent className="max-w-md rounded-[20px]">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="font-display text-xl text-[#134e4a]">
+                  Resync all registrations?
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-left text-sm leading-relaxed text-[#64748b]">
+                  This will re-submit{" "}
+                  <span className="font-semibold text-[#134e4a]">
+                    {totalRegistrationCount} registration
+                    {totalRegistrationCount === 1 ? "" : "s"}
+                  </span>{" "}
+                  to BookingQube, including ones already marked as synced. Duplicate emails may be
+                  skipped by BookingQube.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="gap-2 sm:gap-2">
+                <AlertDialogCancel
+                  disabled={busy === "resync-all"}
+                  className="rounded-[12px] border-[#e2e8f0]"
+                >
+                  Cancel
+                </AlertDialogCancel>
+                <button
+                  type="button"
+                  disabled={busy === "resync-all"}
+                  onClick={() => void resyncAllAgain()}
+                  className="inline-flex h-10 items-center justify-center rounded-[12px] bg-[#0d9488] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0f766e] disabled:opacity-50"
+                >
+                  {busy === "resync-all" ? "Resyncing…" : "Resync all"}
+                </button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           {!enabled ? (
             <p className="mt-2 text-xs text-[#64748b]">Enable BookingQube sync above to use bulk sync.</p>
           ) : !postApiUrl.trim() ? (

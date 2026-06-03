@@ -2216,10 +2216,9 @@ async function fetchSyncedRegistrationIds(): Promise<Set<string>> {
   return synced;
 }
 
-async function listUnsyncedRegistrationIds(): Promise<string[]> {
+async function listAllRegistrationIds(): Promise<string[]> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const syncedIds = await fetchSyncedRegistrationIds();
-  const unsynced: string[] = [];
+  const ids: string[] = [];
   let offset = 0;
   while (true) {
     const { data, error } = await supabaseAdmin
@@ -2229,12 +2228,18 @@ async function listUnsyncedRegistrationIds(): Promise<string[]> {
       .range(offset, offset + UNSYNCED_PAGE_SIZE - 1);
     if (error) throw new Error(error.message);
     for (const row of data ?? []) {
-      if (!syncedIds.has(row.id)) unsynced.push(row.id);
+      ids.push(row.id);
     }
     if ((data?.length ?? 0) < UNSYNCED_PAGE_SIZE) break;
     offset += UNSYNCED_PAGE_SIZE;
   }
-  return unsynced;
+  return ids;
+}
+
+async function listUnsyncedRegistrationIds(): Promise<string[]> {
+  const syncedIds = await fetchSyncedRegistrationIds();
+  const allIds = await listAllRegistrationIds();
+  return allIds.filter((id) => !syncedIds.has(id));
 }
 
 async function getLatestOutboundSyncStatus(registrationId: string): Promise<{
@@ -2293,9 +2298,21 @@ export async function adminCountUnsyncedRegistrations() {
   }
 }
 
-/** Push every unsynced registration to BookingQube POST (concurrency 5). */
-export async function adminSyncUnsyncedRegistrations() {
+/** Total registrations (for bulk resync confirm). */
+export async function adminCountAllRegistrations() {
   await adminContext();
+  try {
+    const ids = await listAllRegistrationIds();
+    return { count: ids.length, tablesReady: true as const };
+  } catch (err) {
+    if (isBookingQubeIntegrationTableError(err as { message?: string; code?: string })) {
+      return { count: 0, tablesReady: false as const };
+    }
+    throw err;
+  }
+}
+
+async function runBulkOutboundBookingQubeSync(ids: string[]) {
   const { resolveBookingQubeConfig, runBookingQubeOutboundSync } = await import(
     "@/lib/bookingqube.sync"
   );
@@ -2312,16 +2329,6 @@ export async function adminSyncUnsyncedRegistrations() {
     config.endpoints.some((e) => e.role === "submit");
   if (!hasPost) {
     throw new Error("BookingQube POST API URL is not configured");
-  }
-
-  let ids: string[];
-  try {
-    ids = await listUnsyncedRegistrationIds();
-  } catch (err) {
-    if (isBookingQubeIntegrationTableError(err as { message?: string; code?: string })) {
-      throw new Error(bookingQubeIntegrationTableErrorMessage());
-    }
-    throw err;
   }
 
   if (ids.length === 0) {
@@ -2359,6 +2366,36 @@ export async function adminSyncUnsyncedRegistrations() {
   }
 
   return { synced, skipped, failed, total: ids.length, errors: errors.slice(0, 50) };
+}
+
+/** Push every unsynced registration to BookingQube POST (concurrency 5). */
+export async function adminSyncUnsyncedRegistrations() {
+  await adminContext();
+  let ids: string[];
+  try {
+    ids = await listUnsyncedRegistrationIds();
+  } catch (err) {
+    if (isBookingQubeIntegrationTableError(err as { message?: string; code?: string })) {
+      throw new Error(bookingQubeIntegrationTableErrorMessage());
+    }
+    throw err;
+  }
+  return runBulkOutboundBookingQubeSync(ids);
+}
+
+/** Re-push every registration to BookingQube POST (concurrency 5), including already synced. */
+export async function adminResyncAllRegistrations() {
+  await adminContext();
+  let ids: string[];
+  try {
+    ids = await listAllRegistrationIds();
+  } catch (err) {
+    if (isBookingQubeIntegrationTableError(err as { message?: string; code?: string })) {
+      throw new Error(bookingQubeIntegrationTableErrorMessage());
+    }
+    throw err;
+  }
+  return runBulkOutboundBookingQubeSync(ids);
 }
 
 export async function adminListBookingQubeSyncLogs(input?: { limit?: number }) {
