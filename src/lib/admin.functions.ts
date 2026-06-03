@@ -21,6 +21,12 @@ import { normalizeStaffUsername } from "@/lib/staff-auth";
 import { getDashboardCounts, getDashboardSchedule } from "@/lib/summersplash.functions";
 import { getSupabaseAdminClientOrNull } from "@/integrations/supabase/client.server";
 import type { AdminServerFilters } from "@/lib/admin-filters.types";
+import {
+  BQ_BULK_SYNC_CHUNK_MAX,
+  BQ_BULK_SYNC_CHUNK_SIZE,
+  type BookingQubeBulkSyncChunkError,
+  type BookingQubeBulkSyncChunkResult,
+} from "@/lib/admin-bookingqube-sync";
 import { computeBookingStats } from "@/components/admin/admin-bookings-utils";
 import { registrationCreatedAtForBookingDay } from "@/lib/utils";
 
@@ -2266,23 +2272,6 @@ async function listUnsyncedRegistrationIds(): Promise<string[]> {
 const BULK_BQ_SYNC_RESYNC_CONCURRENCY = 2;
 const BULK_BQ_SYNC_UNSYNCED_CONCURRENCY = 3;
 const BULK_BQ_SYNC_INTER_REQUEST_MS = 300;
-/** Max registrations per server-action chunk (stays under ~60s on Vercel). */
-export const BQ_BULK_SYNC_CHUNK_SIZE = 40;
-const BQ_BULK_SYNC_CHUNK_MAX = 50;
-
-export type BookingQubeBulkSyncChunkResult = {
-  synced: number;
-  skipped: number;
-  failed: number;
-  rateLimited: number;
-  processed: number;
-  offset: number;
-  total: number;
-  hasMore: boolean;
-  errors: { registrationId: string; error: string }[];
-};
-
-export type BookingQubeBulkSyncChunkError = { error: string };
 
 function bookingQubeBulkSyncChunkError(err: unknown): BookingQubeBulkSyncChunkError {
   if (isBookingQubeIntegrationTableError(err as { message?: string; code?: string })) {

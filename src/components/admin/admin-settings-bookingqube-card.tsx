@@ -48,9 +48,6 @@ import {
   adminListBookingQubeSyncLogs,
   adminResyncRegistrationsChunk,
   adminSyncUnsyncedRegistrationsChunk,
-  BQ_BULK_SYNC_CHUNK_SIZE,
-  type BookingQubeBulkSyncChunkError,
-  type BookingQubeBulkSyncChunkResult,
   adminListEvents,
   adminSaveBookingQubeFieldMappings,
   adminSaveBookingQubeSettings,
@@ -58,6 +55,11 @@ import {
   adminTestBookingQubePost,
   adminUpsertBookingQubeEventMapping,
 } from "@/lib/admin.functions";
+import {
+  BQ_BULK_SYNC_CHUNK_SIZE,
+  type BookingQubeBulkSyncChunkError,
+  type BookingQubeBulkSyncChunkResult,
+} from "@/lib/admin-bookingqube-sync";
 import { BOOKINGQUBE_BOOTSTRAP_MIGRATION_FILE } from "@/lib/bookingqube.integration";
 import {
   LOCAL_REGISTRATION_FIELD_LABELS,
