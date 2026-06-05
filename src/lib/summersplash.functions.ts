@@ -15,7 +15,7 @@ import {
 } from "@/lib/pass-active";
 import { countActionableInvalidScans } from "@/lib/scan-metrics";
 import { isSlotPastForDate } from "@/lib/slot-time";
-import { localCalendarDayBoundsIso } from "@/lib/date-bounds";
+import { localCalendarDayBoundsIso, localCalendarRangeBoundsIso } from "@/lib/date-bounds";
 import { POS_NATIONALITY_VALUES } from "@/lib/pos-customer-demographics";
 import {
   clampBookingDate,
@@ -649,6 +649,49 @@ async function resolveDashboardEvents(supabase: Awaited<ReturnType<typeof getAut
   return { eventsOut, evs, selectedEventId: eventId ?? evs[0]?.id ?? null };
 }
 
+const SCHEDULE_REGISTRATION_PAGE_SIZE = 1000;
+
+type ScheduleRegistrationRow = {
+  id: string;
+  slot_id: string;
+  customer_name: string;
+  guest_count: number | null;
+  status: string;
+  created_at: string;
+};
+
+/** Supabase caps SELECT at 1000 rows — paginate so week/month grids stay complete. */
+async function fetchScheduleRegistrations(
+  supabase: Awaited<ReturnType<typeof getAuthContext>>["supabase"],
+  slotIds: string[],
+  rangeStartIso: string,
+  rangeEndIso: string,
+): Promise<ScheduleRegistrationRow[]> {
+  const rows: ScheduleRegistrationRow[] = [];
+  let offset = 0;
+
+  for (;;) {
+    const { data, error } = await supabase
+      .from("registrations")
+      .select("id, slot_id, customer_name, guest_count, status, created_at")
+      .in("slot_id", slotIds)
+      .gte("created_at", rangeStartIso)
+      .lt("created_at", rangeEndIso)
+      .order("created_at", { ascending: true })
+      .range(offset, offset + SCHEDULE_REGISTRATION_PAGE_SIZE - 1);
+
+    if (error) throw new Error(error.message);
+
+    const batch = (data ?? []) as ScheduleRegistrationRow[];
+    if (batch.length === 0) break;
+    rows.push(...batch);
+    if (batch.length < SCHEDULE_REGISTRATION_PAGE_SIZE) break;
+    offset += SCHEDULE_REGISTRATION_PAGE_SIZE;
+  }
+
+  return rows;
+}
+
 // ============ STAFF: week schedule for live dashboard ============
 export async function getDashboardSchedule(input?: {
   eventId?: string;
@@ -739,9 +782,10 @@ export async function getDashboardSchedule(input?: {
   const slotIds = slots.map((s) => s.id);
   const slotById = new Map(slots.map((s) => [s.id, s]));
 
-  const rangeStart = new Date(`${weekStart}T00:00:00`);
-  const rangeEndExclusive = addDays(parseYmd(weekEnd), 1);
-  const rangeEndIso = new Date(`${formatYmd(rangeEndExclusive)}T00:00:00`).toISOString();
+  const { startIso: rangeStartIso, endIso: rangeEndIso } = localCalendarRangeBoundsIso(
+    weekStart,
+    weekEnd,
+  );
 
   const registrations: DashboardRegistrationCard[] = [];
   const usageMap = new Map<string, DashboardDaySlotUsage>();
@@ -761,16 +805,10 @@ export async function getDashboardSchedule(input?: {
     return usageMap.get(key)!;
   };
 
-  if (slotIds.length > 0) {
-    const { data: regs } = await supabase
-      .from("registrations")
-      .select("id, slot_id, customer_name, guest_count, status, created_at")
-      .in("slot_id", slotIds)
-      .gte("created_at", rangeStart.toISOString())
-      .lt("created_at", rangeEndIso)
-      .order("created_at", { ascending: true });
+  if (slotIds.length > 0 && rangeStartIso && rangeEndIso) {
+    const regs = await fetchScheduleRegistrations(supabase, slotIds, rangeStartIso, rangeEndIso);
 
-    for (const r of regs ?? []) {
+    for (const r of regs) {
       const booking_date = bookingDateFromCreatedAt(r.created_at as string);
       if (booking_date < weekStart || booking_date > weekEnd) continue;
 
