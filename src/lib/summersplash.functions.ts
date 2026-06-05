@@ -16,6 +16,7 @@ import {
 import { countActionableInvalidScans } from "@/lib/scan-metrics";
 import { isSlotPastForDate } from "@/lib/slot-time";
 import { localCalendarDayBoundsIso } from "@/lib/date-bounds";
+import { POS_NATIONALITY_VALUES } from "@/lib/pos-customer-demographics";
 import {
   clampBookingDate,
   eventDateRange,
@@ -1026,7 +1027,7 @@ export async function getScannerSidePanelData(limit = 20) {
   };
 }
 
-const posNationalitySchema = z.enum(["resident", "tourist"]);
+const posNationalitySchema = z.enum(POS_NATIONALITY_VALUES);
 const posAgeGroupSchema = z.enum(["child", "teen", "adult", "senior"]);
 
 const posRegisterSchema = registerSchema.extend({

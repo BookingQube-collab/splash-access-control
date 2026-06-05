@@ -3,6 +3,8 @@
 export const POS_NATIONALITY_OPTIONS = [
   { value: "resident", label: "Resident" },
   { value: "tourist", label: "Tourist" },
+  { value: "qatari", label: "Qatari" },
+  { value: "gcc", label: "GCC" },
 ] as const;
 
 export const POS_AGE_GROUP_OPTIONS = [
@@ -14,6 +16,14 @@ export const POS_AGE_GROUP_OPTIONS = [
 
 export type PosNationality = (typeof POS_NATIONALITY_OPTIONS)[number]["value"];
 export type PosAgeGroup = (typeof POS_AGE_GROUP_OPTIONS)[number]["value"];
+
+/** Tuple for Zod `z.enum()` — keep in sync with {@link POS_NATIONALITY_OPTIONS}. */
+export const POS_NATIONALITY_VALUES = [
+  "resident",
+  "tourist",
+  "qatari",
+  "gcc",
+] as const satisfies readonly PosNationality[];
 
 export const POS_DEFAULT_NATIONALITY: PosNationality = "resident";
 export const POS_DEFAULT_AGE_GROUP: PosAgeGroup = "adult";

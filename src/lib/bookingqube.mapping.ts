@@ -275,7 +275,7 @@ const LOCAL_FIELD_LABEL_HINTS: Record<LocalRegistrationField, string[]> = {
   customer_name: ["name", "full name", "customer", "attendee", "guest name"],
   mobile: ["phone", "mobile", "tel", "whatsapp", "contact"],
   email: ["email", "e-mail", "mail"],
-  nationality: ["nationality", "resident", "tourist", "citizen", "country"],
+  nationality: ["nationality", "resident", "tourist", "qatari", "gcc", "citizen", "country"],
   age_group: ["age group", "age range", "age bracket", "senior", "child", "teen", "adult"],
   guest_count: ["guest", "party", "pax", "attendees", "quantity", "count"],
   booking_date: ["date", "visit date", "booking date", "day"],
@@ -322,7 +322,13 @@ export function guessLocalFieldFromBookingQubeField(field: {
   const l = tokens;
   if (l.includes("phone") || l.includes("mobile")) return "mobile";
   if (l.includes("email")) return "email";
-  if (l.includes("nationality") || l.includes("resident") || l.includes("tourist")) {
+  if (
+    l.includes("nationality") ||
+    l.includes("resident") ||
+    l.includes("tourist") ||
+    l.includes("qatari") ||
+    l.includes("gcc")
+  ) {
     return "nationality";
   }
   if (l.includes("age")) return "age_group";

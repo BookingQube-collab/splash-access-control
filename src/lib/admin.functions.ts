@@ -28,6 +28,7 @@ import {
   type BookingQubeBulkSyncChunkResult,
 } from "@/lib/admin-bookingqube-sync";
 import { computeBookingStats } from "@/components/admin/admin-bookings-utils";
+import { POS_NATIONALITY_VALUES } from "@/lib/pos-customer-demographics";
 import { registrationCreatedAtForBookingDay } from "@/lib/utils";
 
 const adminListFiltersSchema = z
@@ -40,7 +41,7 @@ const adminListFiltersSchema = z
     dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     search: z.string().max(200).optional(),
-    nationality: z.enum(["resident", "tourist"]).optional(),
+    nationality: z.enum(POS_NATIONALITY_VALUES).optional(),
     ageGroup: z.enum(["child", "teen", "adult", "senior"]).optional(),
   })
   .optional();
