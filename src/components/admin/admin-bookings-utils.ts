@@ -1,6 +1,11 @@
 import { format, isValid, parseISO } from "date-fns";
 import type { AdminRegistrationRow } from "@/lib/admin-filter-utils";
-import { posAgeGroupLabel, posNationalityLabel } from "@/lib/pos-customer-demographics";
+import {
+  POS_AGE_GROUP_OPTIONS,
+  POS_NATIONALITY_OPTIONS,
+  posAgeGroupLabel,
+  posNationalityLabel,
+} from "@/lib/pos-customer-demographics";
 import type { PosAgeGroup, PosNationality } from "@/lib/pos-customer-demographics";
 
 export function registrationNationalityLabel(value?: string | null): string {
@@ -66,13 +71,24 @@ export function formatRegistrationWhen(
   return `${format(created, "MMM d, yyyy")}, ${format(slotStart, "h:mm a")}`;
 }
 
+export type BookingBreakdownItem = {
+  key: string;
+  label: string;
+  count: number;
+};
+
 export type BookingStats = {
   total: number;
   active: number;
   pending: number;
   checkedIn: number;
   totalGuestsRegistered: number;
+  byNationality: BookingBreakdownItem[];
+  byAgeGroup: BookingBreakdownItem[];
+  bySlot: BookingBreakdownItem[];
 };
+
+const UNKNOWN_BREAKDOWN_KEY = "__unknown__";
 
 export type BookingDisplayStatus =
   | "Active"
@@ -89,7 +105,94 @@ export const BOOKING_STATUS_STYLES: Record<BookingDisplayStatus, string> = {
   Exited: "bg-[#f1f5f9] text-[#64748b]",
 };
 
-type BookingStatsRow = Pick<AdminRegistrationRow, "status" | "guest_count">;
+type BookingStatsRow = Pick<
+  AdminRegistrationRow,
+  "status" | "guest_count" | "nationality" | "age_group" | "slot_id" | "slots"
+>;
+
+function sortBreakdownKeysByCount(keys: string[], counts: Map<string, number>): string[] {
+  return [...keys].sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0));
+}
+
+function sortNationalityKeys(keys: string[]): string[] {
+  const order = new Map(POS_NATIONALITY_OPTIONS.map((o, i) => [o.value, i]));
+  return [...keys].sort((a, b) => {
+    const ai = order.get(a as PosNationality);
+    const bi = order.get(b as PosNationality);
+    if (ai != null && bi != null) return ai - bi;
+    if (ai != null) return -1;
+    if (bi != null) return 1;
+    if (a === UNKNOWN_BREAKDOWN_KEY) return 1;
+    if (b === UNKNOWN_BREAKDOWN_KEY) return -1;
+    return a.localeCompare(b);
+  });
+}
+
+function sortAgeGroupKeys(keys: string[]): string[] {
+  const order = new Map(POS_AGE_GROUP_OPTIONS.map((o, i) => [o.value, i]));
+  return [...keys].sort((a, b) => {
+    const ai = order.get(a as PosAgeGroup);
+    const bi = order.get(b as PosAgeGroup);
+    if (ai != null && bi != null) return ai - bi;
+    if (ai != null) return -1;
+    if (bi != null) return 1;
+    if (a === UNKNOWN_BREAKDOWN_KEY) return 1;
+    if (b === UNKNOWN_BREAKDOWN_KEY) return -1;
+    return a.localeCompare(b);
+  });
+}
+
+function nationalityBreakdownLabel(key: string): string {
+  if (key === UNKNOWN_BREAKDOWN_KEY) return "Unknown";
+  return posNationalityLabel(key as PosNationality);
+}
+
+function ageGroupBreakdownLabel(key: string): string {
+  if (key === UNKNOWN_BREAKDOWN_KEY) return "Unknown";
+  return posAgeGroupLabel(key as PosAgeGroup);
+}
+
+function buildKeyedBreakdown(
+  rows: BookingStatsRow[],
+  getKey: (row: BookingStatsRow) => string,
+  sortKeys: (keys: string[], counts: Map<string, number>) => string[],
+  labelForKey: (key: string) => string,
+): BookingBreakdownItem[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const key = getKey(row);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return sortKeys([...counts.keys()], counts).map((key) => ({
+    key,
+    label: labelForKey(key),
+    count: counts.get(key) ?? 0,
+  }));
+}
+
+function buildSlotBreakdown(rows: BookingStatsRow[]): BookingBreakdownItem[] {
+  const counts = new Map<string, { label: string; count: number }>();
+  for (const row of rows) {
+    const key = row.slot_id ?? row.slots?.id ?? UNKNOWN_BREAKDOWN_KEY;
+    const existing = counts.get(key);
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+    const label =
+      key === UNKNOWN_BREAKDOWN_KEY
+        ? "Unknown"
+        : row.slots?.name?.trim() || "Unknown slot";
+    counts.set(key, { label, count: 1 });
+  }
+  const keys = sortBreakdownKeysByCount([...counts.keys()], new Map(
+    [...counts.entries()].map(([key, value]) => [key, value.count]),
+  ));
+  return keys.map((key) => {
+    const row = counts.get(key)!;
+    return { key, label: row.label, count: row.count };
+  });
+}
 
 /** Client-side status counts from loaded registration rows (same dataset as the table). */
 export function computeBookingStats(rows: BookingStatsRow[]): BookingStats {
@@ -99,6 +202,9 @@ export function computeBookingStats(rows: BookingStatsRow[]): BookingStats {
     pending: 0,
     checkedIn: 0,
     totalGuestsRegistered: 0,
+    byNationality: [],
+    byAgeGroup: [],
+    bySlot: [],
   };
 
   for (const row of rows) {
@@ -113,6 +219,20 @@ export function computeBookingStats(rows: BookingStatsRow[]): BookingStats {
       stats.active += guests;
     }
   }
+
+  stats.byNationality = buildKeyedBreakdown(
+    rows,
+    (row) => row.nationality?.trim() || UNKNOWN_BREAKDOWN_KEY,
+    (keys, counts) => sortNationalityKeys(keys),
+    nationalityBreakdownLabel,
+  );
+  stats.byAgeGroup = buildKeyedBreakdown(
+    rows,
+    (row) => row.age_group?.trim() || UNKNOWN_BREAKDOWN_KEY,
+    (keys, counts) => sortAgeGroupKeys(keys),
+    ageGroupBreakdownLabel,
+  );
+  stats.bySlot = buildSlotBreakdown(rows);
 
   return stats;
 }

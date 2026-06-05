@@ -373,17 +373,38 @@ export async function adminRegistrationBookingStats(filters?: AdminServerFilters
   const { supabase } = await adminContext();
 
   const slotJoin = registrationSlotJoin(parsed);
-  let query = supabase.from("registrations").select(`status, guest_count, ${slotJoin}(event_id)`);
+  const slotSelect = `${slotJoin}(id, name)`;
+  let selectCols = `status, guest_count, nationality, age_group, slot_id, ${slotSelect}`;
+  let query = supabase.from("registrations").select(selectCols);
   query = applyRegistrationListFilters(query, parsed);
 
-  const { data, error } = await query.limit(5000);
+  let { data, error } = await query.limit(5000);
+  if (error && /(nationality|age_group)/.test(error.message ?? "")) {
+    selectCols = `status, guest_count, slot_id, ${slotSelect}`;
+    query = supabase.from("registrations").select(selectCols);
+    query = applyRegistrationListFilters(query, parsed);
+    ({ data, error } = await query.limit(5000));
+  }
   if (error) throw new Error(error.message);
+
+  type StatsRow = {
+    guest_count: number | null;
+    status: string;
+    nationality?: string | null;
+    age_group?: string | null;
+    slot_id?: string;
+    slots?: { id?: string; name?: string } | null;
+  };
 
   return {
     stats: computeBookingStats(
-      (data ?? []).map((row) => ({
+      ((data ?? []) as unknown as StatsRow[]).map((row) => ({
         guest_count: row.guest_count ?? 0,
-        status: row.status as string,
+        status: row.status,
+        nationality: row.nationality ?? null,
+        age_group: row.age_group ?? null,
+        slot_id: row.slot_id,
+        slots: row.slots ?? null,
       })),
     ),
   };

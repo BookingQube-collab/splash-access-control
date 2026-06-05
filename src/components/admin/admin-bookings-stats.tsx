@@ -14,8 +14,10 @@ import type { BookingStats } from "@/components/admin/admin-bookings-utils";
 import { formatBookingPct } from "@/components/admin/admin-bookings-utils";
 import { cn } from "@/lib/utils";
 
+type StatCardKey = "total" | "totalGuestsRegistered" | "active" | "pending" | "checkedIn";
+
 type StatConfig = {
-  key: keyof BookingStats;
+  key: StatCardKey;
   label: string;
   icon: LucideIcon;
   iconWrap: string;

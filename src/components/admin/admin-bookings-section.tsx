@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { AdminBookingsEditDialog, type BookingEditForm } from "@/components/admin/admin-bookings-edit-dialog";
 import { AdminBookingsFilters } from "@/components/admin/admin-bookings-filters";
 import { AdminBookingsStats } from "@/components/admin/admin-bookings-stats";
+import { AdminBookingsBreakdowns } from "@/components/admin/admin-bookings-breakdowns";
 import { AdminBookingsTable } from "@/components/admin/admin-bookings-table";
 import {
   computeBookingStats,
@@ -397,6 +398,8 @@ export function AdminBookingsSection() {
       />
 
       <AdminBookingsStats stats={stats} />
+
+      <AdminBookingsBreakdowns stats={stats} slotsById={slotsById} />
 
       <AdminBookingsFilters
         filters={tableFilters.filters}
